@@ -5,10 +5,6 @@ Tasks: 1C — e.g. DXY=105 with SMA=103 → MacroGate fails; ADX=18 → TrendGat
 
 from __future__ import annotations
 
-import pytest
-
-from trading_advisor.guards.base import GuardResult
-
 
 # Tests will be added in Task 1C.
 # Each guard tested with:
