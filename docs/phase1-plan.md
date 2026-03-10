@@ -55,7 +55,7 @@ Signal only fires if ALL applicable guards are green. Any red = stay cash.
 
 | # | Guard | Rule | Why |
 |---|-------|------|-----|
-| 1 | **Macro Gate** | DXY < 200 SMA (weak dollar favors gold) | Gold moves inversely to dollar strength |
+| 1 | **Macro Gate** | EUR/USD > 200 SMA (weak dollar = strong euro = gold bullish) | Gold moves inversely to dollar strength. We use EUR/USD (inverted DXY proxy, 57.6% of DXY weight) because actual DXY isn't available on Tiingo. |
 | 2 | **Trend Gate** | ADX(14) > 20 | Don't trade ranging markets |
 | 3 | **Macro Event Guard** | No FOMC/NFP/CPI within 2 days | These events whipsaw gold violently |
 | 4 | **Pullback Zone** | (Close - EMA_8) / EMA_8 <= 0.02 | Don't chase extended moves. 5% is too loose for gold — it almost never triggers. 2% filters out genuinely extended entries. Validate this threshold against historical distance-from-EMA_8 distribution in Task 1B. |
@@ -126,7 +126,7 @@ Recovery thresholds: 8% resumes at <6%, 12% resumes at <8%, 15% requires manual 
 
 **What to fetch:**
 - XAU/USD daily OHLCV (minimum 5 years, ideally 10)
-- DXY daily (for Macro Gate). Use UUP ETF as proxy via Tiingo, or DX-Y.NYB
+- EUR/USD daily (for Macro Gate, inverted DXY proxy). Same Tiingo forex endpoint as XAU/USD.
 - VIX daily from FRED (for future use and regime context)
 - FRED macro data: T10Y2Y (yield curve), FEDFUNDS
 
@@ -136,7 +136,7 @@ Recovery thresholds: 8% resumes at <6%, 12% resumes at <8%, 15% requires manual 
 data/
 ├── ohlcv/
 │   ├── XAUUSD_daily.parquet
-│   ├── DXY_daily.parquet
+│   ├── EURUSD_daily.parquet
 │   └── SPY_daily.parquet
 ├── macro/
 │   ├── VIX.parquet
@@ -178,7 +178,7 @@ data/
 | 9 | Lower Wick Ratio | (min(Open,Close) - Low) / (High - Low) |
 | 10 | EMA Fan | Boolean: EMA_8 > EMA_20 > EMA_50 |
 | 11 | Distance from 20d Low | (Close - min(Low, 20d)) / Close |
-| 12 | Relative Strength vs DXY | Rolling 20d z-score of RS ratio |
+| 12 | Relative Strength vs USD | Rolling 20d z-score of XAU/EUR-USD ratio |
 
 **Momentum composite (5 components, volume excluded, all z-scored over rolling 252 trading-day window):**
 - Momentum: 6-month return, skip most recent month. z-scored. Weight: 44%
@@ -208,21 +208,34 @@ class GuardResult:
     guard_name: str
     reason: str  # e.g., "DXY at 104.2, above 200 SMA (103.8)"
 
-def macro_gate(dxy_data) -> GuardResult: ...
+# Guard toggle config — each guard can be enabled/disabled.
+# Used in backtesting to test every combination and measure which guards
+# actually improve performance vs which ones just filter out valid trades.
+# Drawdown gate should always stay on.
+GUARDS_ENABLED = {
+    "macro_gate": True,
+    "trend_gate": True,
+    "event_guard": True,
+    "pullback_zone": True,
+    "drawdown_gate": True,
+}
+
+def macro_gate(eurusd_data) -> GuardResult: ...
 def trend_gate(adx_value) -> GuardResult: ...
 def macro_event_guard(economic_calendar, today) -> GuardResult: ...
 def pullback_zone(close, ema_8) -> GuardResult: ...
 def drawdown_gate(portfolio_state) -> GuardResult: ...
 
-def run_guards(market_data, portfolio_state) -> List[GuardResult]:
-    """Returns list of all guard results. Signal only valid if all pass."""
+def run_guards(market_data, portfolio_state, enabled=GUARDS_ENABLED) -> List[GuardResult]:
+    """Runs only enabled guards. Signal valid if all enabled guards pass.
+    Disabled guards are skipped and logged as 'SKIPPED' in results."""
 ```
 
 **Economic calendar:** For Phase 1, hardcode known FOMC/NFP/CPI dates for the backtest period. In production, fetch from FRED + Finnhub.
 
 **Deliverable:** Guard pipeline that returns a clear pass/fail with human-readable reasons for each guard.
 
-**Test:** Unit test each guard with known inputs. Example: DXY at 105 with 200 SMA at 103 → macro gate fails. ADX at 18 → trend gate fails. 1 day before FOMC → macro event guard fails.
+**Test:** Unit test each guard with known inputs. Example: EUR/USD at 1.05 with 200 SMA at 1.08 → macro gate fails (euro below average = strong dollar). ADX at 18 → trend gate fails. 1 day before FOMC → macro event guard fails.
 
 ### Task 1D: Signal Generation (Week 2-3)
 
@@ -334,6 +347,8 @@ The shuffled-price test is the most important. If your strategy makes money on r
 - Momentum lookback: test 3M, 6M, 9M, 12M
 - EMA periods: test common combinations
 
+**Guard ablation study:** Run the backtest with each guard individually toggled off (using GUARDS_ENABLED config). Compare Sharpe, max drawdown, and trade count against the all-guards-on baseline. If disabling a guard improves or doesn't change performance, that guard isn't earning its place. The Macro Gate (DXY/EUR-USD) is the most likely candidate to be dropped, since gold sometimes rallies during dollar strength (safe haven flows). Let the data decide.
+
 Look for a wide plateau of profitability. Sharp peaks = overfit.
 
 **Deliverable:** Backtest report with all metrics, equity curve, walk-forward results, Monte Carlo distribution, parameter heatmap.
@@ -361,7 +376,7 @@ Only build this AFTER the backtest validates. No point having beautiful notifica
 🏷️ Broker: IG (spread bet — TAX FREE)
 
 📈 Guards Passed:
-  DXY < 200 SMA (weak dollar) ✅
+  EUR/USD > 200 SMA (weak dollar) ✅
   ADX: 28 (trending) ✅
   No FOMC within 2 days ✅
   Pullback zone: 1.2% from EMA_8 ✅
@@ -387,7 +402,7 @@ Only build this AFTER the backtest validates. No point having beautiful notifica
    Cash Reserve: 71.7% / 40% ✅
 
 🔮 Market Context:
-   DXY: 103.2 (below 200 SMA) ✅
+   EUR/USD: 1.092 (above 200 SMA — weak dollar) ✅
    Gold composite: 0.8σ (NEUTRAL)
    Next FOMC: 12 days
 
@@ -412,22 +427,32 @@ Portfolio state is tracked via these commands. You tell the bot what you did, it
 
 **Test:** Send yourself a test signal card. Execute the commands. Verify portfolio state updates correctly.
 
-### Task 1H: Scheduler + Deployment (Week 5-6)
+### Task 1H: Deployment (Week 5-6)
 
-**Goal:** Bot runs daily on AWS, automatically.
+**Goal:** Bot runs daily, automatically. Choose your deployment target.
 
-**Architecture:**
-- AWS Lambda (ARM/Graviton2, 3GB RAM, container image)
-- EventBridge Scheduler triggers:
-  - 23:00 UTC: data ingest + signal scan
-  - 09:00 UTC: daily briefing
-- Lambda Function URL for Telegram webhook (no API Gateway needed)
-- S3 for parquet data storage
-- Portfolio state: JSON file in S3 (upgrade to DynamoDB in Phase 2 if needed)
+The package is infrastructure-agnostic. You install it, set env vars, and schedule the CLI commands. Two reference deployments are documented:
 
-**Estimated cost: < $1/month.** Your $300 credit covers this for decades.
+**Option A: Laptop / Raspberry Pi**
+- `pip install wealthops` (or `uv add wealthops`)
+- `.env` file with `WEALTHOPS_STORAGE=local` and API keys
+- cron (or Task Scheduler on Windows):
+  - 23:00 UTC Mon-Fri: `wealthops ingest`
+  - 09:00 UTC Mon-Fri: `wealthops briefing`
+- systemd service (or screen/tmux): `wealthops bot` (polling mode)
+- UptimeRobot pings `wealthops health` endpoint
+- Cost: €0/month (Pi: ~€100 one-time for hardware)
 
-**Deliverable:** Lambda deployed, EventBridge scheduled, bot running autonomously. You receive a daily briefing at 9am and signal cards when they fire.
+**Option B: AWS**
+- `pip install wealthops[aws]` in a Docker container → push to ECR
+- Lambda function with handler calling `wealthops ingest` / `wealthops briefing`
+- EventBridge Scheduler for cron triggers
+- Lambda Function URL for Telegram webhook (`WEALTHOPS_TELEGRAM_MODE=webhook`)
+- S3 for storage (`WEALTHOPS_STORAGE=s3`)
+- SSM Parameter Store for secrets
+- Cost: < $1/month
+
+**Deliverable:** Bot running on your chosen platform. You receive a daily briefing at 9am and signal cards when they fire. Verify: runs autonomously for 3+ days.
 
 ---
 
@@ -435,11 +460,17 @@ Portfolio state is tracked via these commands. You tell the bot what you did, it
 
 ```
 trading-advisor/
-├── pyproject.toml                  # uv managed
+├── pyproject.toml                  # uv managed, PyPI package config
 ├── src/
 │   └── trading_advisor/
 │       ├── __init__.py
-│       ├── config.py              # asset configs, risk params, API keys (env vars)
+│       ├── config.py              # loads all config from env vars (WEALTHOPS_*)
+│       ├── cli.py                 # CLI entry points: ingest, briefing, bot, backtest, health
+│       ├── storage/
+│       │   ├── __init__.py
+│       │   ├── base.py            # StorageBackend ABC (read/write parquet + JSON)
+│       │   ├── local.py           # LocalStorage (default, files on disk)
+│       │   └── s3.py              # S3Storage (optional, behind [aws] extra)
 │       ├── data/
 │       │   ├── __init__.py
 │       │   ├── base.py            # abstract DataProvider
@@ -451,7 +482,7 @@ trading-advisor/
 │       │   └── composite.py       # Momentum Composite calculation
 │       ├── guards/
 │       │   ├── __init__.py
-│       │   ├── base.py            # abstract Guard + GuardResult
+│       │   ├── base.py            # abstract Guard + GuardResult + GUARDS_ENABLED config
 │       │   ├── macro_gate.py
 │       │   ├── trend_gate.py
 │       │   ├── event_guard.py
@@ -467,32 +498,41 @@ trading-advisor/
 │       │   └── manager.py         # portfolio state, drawdown tracking
 │       ├── notifications/
 │       │   ├── __init__.py
-│       │   └── telegram.py        # bot, commands, message formatting
+│       │   └── telegram.py        # bot (polling + webhook), commands, formatting
 │       ├── backtest/
 │       │   ├── __init__.py
 │       │   ├── engine.py          # execution simulation
 │       │   ├── validation.py      # walk-forward, Monte Carlo, shuffled-price
 │       │   └── report.py          # metrics + charts
-│       └── runner.py              # main: fetch → analyze → notify
+│       └── runner.py              # orchestrator: fetch → analyze → notify
 ├── tests/
 │   ├── test_indicators.py
 │   ├── test_composite.py
 │   ├── test_guards.py
 │   ├── test_signals.py
 │   ├── test_sizing.py
+│   ├── test_storage.py
 │   └── test_notifications.py
 ├── scripts/
 │   ├── backtest_xauusd.py         # run full backtest
 │   └── bootstrap_data.py          # initial data download
 ├── data/                           # local parquet cache (gitignored)
-└── infrastructure/
-    ├── lambda/                     # deployment package
-    └── terraform/                  # or CDK, your choice
+├── logs/                           # rotating logs (gitignored)
+└── deploy/                         # example deployment configs (not part of package)
+    ├── wealthops-bot.service       # systemd unit file (Pi/Linux)
+    ├── crontab.example             # cron schedule example
+    ├── lambda/                     # AWS Lambda handler + Dockerfile
+    └── eventbridge.json            # EventBridge schedule config
 ```
 
 **Key design choices:**
+- **PyPI package.** `pip install wealthops` for local/Pi use, `pip install wealthops[aws]` for S3 backend. Strategy code ships as the package. Deployment configs are examples in the repo, not part of the package.
+- **Storage abstraction.** `StorageBackend` ABC with `LocalStorage` (default) and `S3Storage` (optional). The strategy never knows where data lives.
+- **CLI entry points.** `wealthops ingest`, `wealthops briefing`, `wealthops bot`, `wealthops backtest`, `wealthops health`. How you schedule them is your choice (cron, EventBridge, Task Scheduler, whatever).
+- **Config via env vars only.** All config comes from `WEALTHOPS_*` environment variables. No config files to manage across environments. On a laptop/Pi, use a `.env` file. On AWS, use SSM or Lambda env vars.
+- **Telegram bot supports polling and webhook.** Polling for laptop/Pi (long-running process). Webhook for Lambda (stateless). Same bot code, different transport. Controlled by `WEALTHOPS_TELEGRAM_MODE=polling|webhook`.
 - Abstract base classes for DataProvider, Guard, Strategy. When Phase 2 adds IBKR stocks, you implement interfaces. No refactoring.
-- Guards are individual modules. Easy to test, easy to add new ones, easy to disable.
+- Guards are individual modules with toggle config. Easy to test, easy to add, easy to disable.
 - Portfolio manager is simple in Phase 1 (JSON state, Telegram commands). Upgrades to DynamoDB + broker API in Phase 2.
 - Backtest engine is separate from live runner. Same strategy code, different execution paths.
 
@@ -503,16 +543,28 @@ trading-advisor/
 | Tool | Purpose |
 |------|---------|
 | Python 3.12+ | Language |
-| uv | Package management |
+| uv | Package management + environment |
 | pandas + pandas-ta | Data manipulation + indicators |
-| Tiingo API | XAU/USD, DXY, stock data |
+| Tiingo API | XAU/USD, EUR/USD (forex endpoint) |
 | FRED API | VIX, yield curve, fed funds |
 | vectorbt or custom | Backtesting (evaluate both, vectorbt may not handle Trap Orders well) |
 | matplotlib + plotly | Charts and heatmaps |
-| python-telegram-bot | Telegram integration |
+| python-telegram-bot | Telegram integration (polling + webhook) |
+| click or typer | CLI entry points |
+| python-dotenv | Env var loading from .env |
+| boto3 (optional) | S3 storage backend, behind `[aws]` extra |
 | pytest | Testing |
-| AWS Lambda + EventBridge | Scheduled execution |
-| S3 | Data + state storage |
+
+**pyproject.toml extras:**
+```toml
+[project.optional-dependencies]
+aws = ["boto3"]
+
+[project.scripts]
+wealthops = "trading_advisor.cli:main"
+```
+
+**Deployment is not part of the package.** Example configs for cron, systemd, Lambda, and EventBridge live in `deploy/` in the repo. Users schedule `wealthops ingest` and `wealthops briefing` however they want.
 
 **Note on vectorbt:** The Trap Order execution logic (buy stop + limit, gap-through rejection, time stops) is complex enough that vectorbt might not handle it natively. You may need a custom backtest loop. That's fine. Write it yourself with pandas. Simpler to debug than fighting a framework's abstractions.
 
@@ -528,7 +580,7 @@ trading-advisor/
 - [ ] Total trades > 100 in backtest period
 - [ ] Telegram bot sends signal cards and daily briefings
 - [ ] Portfolio state tracks correctly via Telegram commands
-- [ ] Lambda runs daily on schedule
+- [ ] Bot runs daily on schedule (cron, EventBridge, or equivalent)
 - [ ] All guard logic has unit tests
 - [ ] Indicator calculations verified against TradingView
 
@@ -554,8 +606,8 @@ trading-advisor/
 - No broker API integration (advisory only, you execute manually on IG)
 - No rare opportunity detection (separate module, later)
 - No auto-execution
-- No DynamoDB (JSON on S3 is enough for one user)
-- No Docker dev environment (unnecessary overhead right now)
+- No database (JSON file via StorageBackend is enough for one user)
+- No Docker (unless deploying to AWS Lambda)
 
 ---
 
