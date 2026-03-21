@@ -1,10 +1,5 @@
 # WealthOps — Progress Tracker
 
-## Current Status
-
-**Active task:** Not started — next up is Task 1A (Data Pipeline)
-**Blockers:** None
-**Last updated:** 2026-03-17
 
 ---
 
@@ -25,9 +20,6 @@ _Log significant decisions here with brief rationale so they don't get re-discus
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-03-17 | Use Notion database for task tracking instead of file-based progress | Claude can query for next task without loading entire files. Structured status tracking (To Do / In Progress / Done / Blocked) with notes per task. |
-| 2026-03-17 | Created CLAUDE.md as conversation entry point | Prevents loading all files every session. Routes Claude to the right doc for the current task. |
-| 2026-03-17 | Trimmed phase1-plan.md, removed duplicate architecture content | Directory structure, tech stack, and deployment details now live only in Architecture.md. Single source of truth. |
 | 2026-03-10 | EUR/USD as inverted DXY proxy | Same Tiingo forex endpoint as gold. No extra data source needed. |
 | 2026-03-10 | Guard toggle system with ablation study | GUARDS_ENABLED config dict. Data decides which guards stay, not assumptions. |
 | 2026-03-10 | StorageBackend ABC with LocalStorage + S3Storage | Deployment-agnostic from day one. S3 behind optional `[aws]` extra. |
