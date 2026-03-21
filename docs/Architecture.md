@@ -2,7 +2,7 @@
 
 ## Purpose of This Document
 
-This is the technical architecture reference for WealthOps, a gold swing trading advisory system. It's written primarily for AI assistants working on the codebase, so they understand how the system fits together, where things live, and why decisions were made.
+This is the single source of truth for WealthOps system design: directory structure, data flow, storage, deployment, monitoring, and infrastructure. Written primarily for AI assistants working on the codebase. For strategy specs (what to trade, how to score it), see `phase1-plan.md`. For the conversation entry point, see `CLAUDE.md`.
 
 ---
 

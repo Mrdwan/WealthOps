@@ -55,3 +55,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Claude
+.claude/todo.md
+.claude/memory.json

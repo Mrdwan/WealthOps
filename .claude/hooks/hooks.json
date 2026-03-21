@@ -1,0 +1,13 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "tool == 'Write' || tool == 'Edit'",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "#!/bin/bash\nif [[ \"$file_path\" == *.py ]]; then\n  ruff check --fix --quiet \"$file_path\" 2>/dev/null\n  ruff format --quiet \"$file_path\" 2>/dev/null\nfi"
+        }
+      ]
+    }
+  ]
+}

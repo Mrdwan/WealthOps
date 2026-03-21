@@ -1,6 +1,55 @@
 # WealthOps — Progress Tracker
 
-## Phase 1: Gold Swing Trading Advisory Bot
+## Current Status
+
+**Active task:** Not started — next up is Task 1A (Data Pipeline)
+**Blockers:** None
+**Last updated:** 2026-03-17
+
+---
+
+## Recent Activity
+
+_Update this section after each work session. Keep the last 5-10 entries. Oldest entries can be archived or deleted._
+
+| Date | What Happened |
+|------|--------------|
+| 2026-03-17 | Created CLAUDE.md routing document. Refined memory bank architecture: CLAUDE.md as entry point, phase1-plan.md trimmed to strategy-only, PROGRESS.md expanded with decisions log. Planning to use Notion for granular task tracking. |
+| 2026-03-10 | Initial project planning complete. All four docs (phase1-plan, Architecture, CODING_STANDARDS, PROGRESS) drafted and reviewed. |
+
+---
+
+## Decisions Made
+
+_Log significant decisions here with brief rationale so they don't get re-discussed._
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-03-17 | Use Notion database for task tracking instead of file-based progress | Claude can query for next task without loading entire files. Structured status tracking (To Do / In Progress / Done / Blocked) with notes per task. |
+| 2026-03-17 | Created CLAUDE.md as conversation entry point | Prevents loading all files every session. Routes Claude to the right doc for the current task. |
+| 2026-03-17 | Trimmed phase1-plan.md, removed duplicate architecture content | Directory structure, tech stack, and deployment details now live only in Architecture.md. Single source of truth. |
+| 2026-03-10 | EUR/USD as inverted DXY proxy | Same Tiingo forex endpoint as gold. No extra data source needed. |
+| 2026-03-10 | Guard toggle system with ablation study | GUARDS_ENABLED config dict. Data decides which guards stay, not assumptions. |
+| 2026-03-10 | StorageBackend ABC with LocalStorage + S3Storage | Deployment-agnostic from day one. S3 behind optional `[aws]` extra. |
+| 2026-03-10 | €15,000 starting capital | Comfortable headroom above IG minimums at 2% risk per trade. |
+| 2026-03-10 | No vectorbt | Trap Order logic too custom. Write backtest loop with pandas. |
+| 2026-03-10 | All config via WEALTHOPS_* env vars | No config files. python-dotenv for local, SSM/Lambda env for AWS. |
+
+---
+
+## Open Questions
+
+_Things still being figured out. Remove once resolved and add to Decisions Made._
+
+- **pandas-ta vs manual indicator implementation?** pandas-ta is convenient but may not match TradingView exactly for some indicators. Need to verify during Task 1B.
+- **Click vs Typer for CLI?** Both work. Typer is newer and has auto-generated help. Pick during Task 1H.
+- **Support/Resistance detection method?** "Price clustering" is vague. Need to define the exact algorithm during Task 1B. Options: pivot points, volume profile zones (no volume for gold though), or simple rolling min/max proximity.
+
+---
+
+## Task Checklist
+
+_Canonical task status lives in Notion "WealthOps Tasks" database. This checklist is a fallback summary._
 
 ### Task 1A: Data Pipeline
 - [ ] Tiingo API integration (XAU/USD daily OHLCV)
@@ -86,11 +135,3 @@
 - Walk-forward efficiency < 30%
 - Win rate > 75% (overfit)
 - < 50 trades in 5 years
-
----
-
-## Current Status
-
-**Active task:** Not started
-**Blockers:** None
-**Last updated:** 2026-03-10
