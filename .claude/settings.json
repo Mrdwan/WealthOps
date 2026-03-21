@@ -18,7 +18,7 @@
     ]
   },
   "env": {
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-5-20250929"
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "10",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
   }
 }
