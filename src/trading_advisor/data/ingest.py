@@ -8,7 +8,7 @@ from trading_advisor.data.base import MacroProvider, OHLCVProvider
 from trading_advisor.data.validation import ValidationResult, validate_ohlcv
 from trading_advisor.storage.base import StorageBackend
 
-_DEFAULT_START: str = "2015-01-01"
+_DEFAULT_START: str = "2020-01-01"
 
 
 class DataIngestor:
@@ -148,7 +148,7 @@ class DataIngestor:
         """Run the full daily ingest for all configured symbols and macro series.
 
         Ingests XAUUSD and EURUSD OHLCV data, plus VIX, T10Y2Y, and FEDFUNDS
-        macro series, all starting from :data:`_DEFAULT_START` (``2015-01-01``).
+        macro series, all starting from :data:`_DEFAULT_START` (``2020-01-01``).
 
         Args:
             end_date: End date in ``'YYYY-MM-DD'`` format.
