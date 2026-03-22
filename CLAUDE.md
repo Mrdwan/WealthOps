@@ -41,7 +41,7 @@ Project docs live in `docs/`. Only read what's relevant:
 
 | If your task involves... | Read... |
 |--------------------------|---------|
-| Session start / what to work on next | `docs/PROGRESS.md` |
+| Session start / what to work on next | `docs/strategy/phase1-plan.md` (Task Checklist — find first uncompleted task) |
 | Resuming a planned feature | `docs/plans/` (check for existing spec/plan) |
 | Data pipeline, indicators, guards, signals, backtest | `docs/strategy/phase1-plan.md` (relevant task section only) |
 | System design, directory structure, deployment | `docs/architecture.md` |

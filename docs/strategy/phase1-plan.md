@@ -416,6 +416,20 @@ See `Architecture.md` for full deployment details (directory structure, env vars
 | Win rate > 75% in backtest | Almost certainly overfit. Investigate. |
 | < 50 trades in 5 years | Not enough data. Consider shorter timeframe or different asset. |
 
+## Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| No vectorbt | Trap Order logic too custom. Write backtest loop with pandas. |
+
+## Open Questions
+
+- **pandas-ta vs manual indicator implementation?** pandas-ta is convenient but may not match TradingView exactly for some indicators. Verify during Task 1B.
+- **Click vs Typer for CLI?** Both work. Typer has auto-generated help. Pick during Task 1H.
+- **Support/Resistance detection method?** Options: pivot points, volume profile zones (no volume for gold), or rolling min/max proximity. Define during Task 1B.
+
+---
+
 ## What Phase 1 Does NOT Include
 
 - No XGBoost or ML (Phase 3)

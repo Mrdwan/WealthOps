@@ -10,7 +10,9 @@ Otherwise: run in **interactive mode** (default). Ask questions and wait for app
 
 ## Phase 1: Understand
 
-Check `docs/plans/` for an existing spec matching this feature. If found, skip this phase — use the spec as input.
+**If no feature is specified in `$ARGUMENTS`:** Read `docs/strategy/phase1-plan.md` Task Checklist. Find the first uncompleted task in dependency order. Use that as the feature. Skip to Phase 2.
+
+**If a feature is specified:** Check `docs/plans/` for an existing spec matching this feature. If found, skip the rest of this phase — use the spec as input.
 
 Otherwise, ask the user questions until you fully understand:
 - What problem this solves
@@ -97,10 +99,9 @@ After all tasks are done:
 
 ## Phase 5: Report
 
-1. Update `docs/PROGRESS.md`:
-   - Add a row to the Recent Activity table with today's date and what was built
+1. Update `docs/strategy/phase1-plan.md`:
    - Check off completed items in the Task Checklist
-   - Move any resolved open questions to Decisions Made
+   - Move any resolved open questions to Decisions
 
 2. Tell the user:
    - What was built (files created/modified)
