@@ -1,4 +1,4 @@
-"""Abstract OHLCVProvider base class for market data providers."""
+"""Abstract base classes for market data and macro data providers."""
 
 from __future__ import annotations
 
@@ -28,5 +28,29 @@ class OHLCVProvider(ABC):
             DataFrame with a DatetimeIndex named ``date`` and columns
             ``open``, ``high``, ``low``, ``close``. ``volume`` is optional
             (0.0 for forex).
+        """
+        ...
+
+
+class MacroProvider(ABC):
+    """Abstract base class for macro data providers.
+
+    Implementors must return a DataFrame with a DatetimeIndex named ``date``
+    and a single ``value`` column.
+    """
+
+    @abstractmethod
+    def fetch_series(self, series_id: str, start: str, end: str) -> pd.DataFrame:
+        """Fetch a macro data series between start and end dates.
+
+        Args:
+            series_id: Series identifier, e.g. ``'VIXCLS'``, ``'T10Y2Y'``,
+                ``'FEDFUNDS'``.
+            start: Start date in ``'YYYY-MM-DD'`` format.
+            end: End date in ``'YYYY-MM-DD'`` format.
+
+        Returns:
+            DataFrame with a DatetimeIndex named ``date`` and a single
+            ``value`` column. NaN rows are excluded.
         """
         ...
