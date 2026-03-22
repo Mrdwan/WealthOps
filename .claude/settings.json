@@ -9,6 +9,7 @@
       "Bash(rm -r:*)",
       "Bash(git reset --hard:*)",
       "Bash(git checkout -- :*)",
+      "Bash(git checkout .:*)",
       "Edit(.env)"
     ],
     "allow": [
@@ -22,10 +23,7 @@
       "Bash(git diff:*)",
       "Bash(git checkout:*)",
       "Bash(git branch:*)",
-      "Bash(uv:*)",
-      "Bash(uv run:*)",
-      "Bash(uv add:*)",
-      "Bash(uv sync:*)"
+      "Bash(uv:*)"
     ]
   },
   "hooks": {

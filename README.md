@@ -223,7 +223,7 @@ Phase 1 has a hard go/no-go gate: the strategy must pass walk-forward validation
 
 This is a personal project, but the code is open source. If you find a bug or have a suggestion, open an issue. PRs welcome if they come with tests.
 
-Before contributing, read [docs/coding-standards.md](docs/coding-standards.md). The short version: 100% test coverage, mypy --strict, ruff formatting, and dependency injection everywhere. No exceptions.
+100% test coverage, mypy --strict, ruff formatting, and dependency injection everywhere. No exceptions.
 
 ---
 
