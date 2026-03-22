@@ -95,7 +95,7 @@ class DataIngestor:
             combined_result = self._validator(combined)
             if not combined_result.valid:
                 raise ValueError(
-                    f"Combined OHLCV validation failed for {symbol!r}: " f"{combined_result.errors}"
+                    f"Combined OHLCV validation failed for {symbol!r}: {combined_result.errors}"
                 )
             self._storage.write_parquet(storage_key, combined)
         else:

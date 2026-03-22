@@ -109,4 +109,20 @@ After all tasks are done:
    - Test results and coverage
    - Any issues found and how they were resolved
 
+## Phase 6: Manual Testing Guide
+
+At the end of every build session, provide the user a **Manual Testing Guide** specific to what was built. This is not optional — always include it.
+
+### Structure:
+
+**1. Prerequisites** — what the user needs before they can test:
+- Services to install (databases, CLI tools, runtimes, etc.)
+- API keys/tokens to obtain: where to sign up, what the env var is called, and how to set it
+
+**2. Step-by-step testing** — concrete CLI commands or short `uv run wealthops ...` invocations to verify the feature works end-to-end with real data/services (not automated tests — those already ran). Never give raw Python code to paste — always use the project's CLI entry points or one-liner `uv run python -c "..."` if no CLI exists yet.
+
+**3. Expected output** — what the user should see if everything is working. Include example output or descriptions like "You should see 2500+ rows of XAU/USD daily data from 2015 to today."
+
+Be specific to what was built in this session. Do not give generic advice.
+
 Done.

@@ -103,6 +103,4 @@ def create_storage(settings: Settings) -> StorageBackend:
     """
     if settings.storage_type == "local":
         return LocalStorage(settings.data_dir)
-    raise ValueError(
-        f"Unknown storage type: {settings.storage_type!r}. " "Supported types: 'local'."
-    )
+    raise ValueError(f"Unknown storage type: {settings.storage_type!r}. Supported types: 'local'.")

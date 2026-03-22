@@ -77,36 +77,36 @@ def validate_ohlcv(df: pd.DataFrame) -> ValidationResult:
         bad_hl = df[df["high"] < df["low"]]
         if not bad_hl.empty:
             errors.append(
-                f"high >= low violated on {len(bad_hl)} row(s): " f"index={list(bad_hl.index)}"
+                f"high >= low violated on {len(bad_hl)} row(s): index={list(bad_hl.index)}"
             )
 
         bad_ho = df[df["high"] < df["open"]]
         if not bad_ho.empty:
             errors.append(
-                f"high >= open violated on {len(bad_ho)} row(s): " f"index={list(bad_ho.index)}"
+                f"high >= open violated on {len(bad_ho)} row(s): index={list(bad_ho.index)}"
             )
 
         bad_hc = df[df["high"] < df["close"]]
         if not bad_hc.empty:
             errors.append(
-                f"high >= close violated on {len(bad_hc)} row(s): " f"index={list(bad_hc.index)}"
+                f"high >= close violated on {len(bad_hc)} row(s): index={list(bad_hc.index)}"
             )
 
         bad_lo = df[df["low"] > df["open"]]
         if not bad_lo.empty:
             errors.append(
-                f"low <= open violated on {len(bad_lo)} row(s): " f"index={list(bad_lo.index)}"
+                f"low <= open violated on {len(bad_lo)} row(s): index={list(bad_lo.index)}"
             )
 
         bad_lc = df[df["low"] > df["close"]]
         if not bad_lc.empty:
             errors.append(
-                f"low <= close violated on {len(bad_lc)} row(s): " f"index={list(bad_lc.index)}"
+                f"low <= close violated on {len(bad_lc)} row(s): index={list(bad_lc.index)}"
             )
 
     # 7. Index must be DatetimeIndex
     if not isinstance(df.index, pd.DatetimeIndex):
-        errors.append("Index must be a DatetimeIndex, " f"got {type(df.index).__name__!r} instead.")
+        errors.append(f"Index must be a DatetimeIndex, got {type(df.index).__name__!r} instead.")
     else:
         # 7b. Monotonically increasing
         if not df.index.is_monotonic_increasing:
@@ -128,7 +128,7 @@ def validate_ohlcv(df: pd.DataFrame) -> ValidationResult:
         ).abs() / prev_close[nonzero_mask]
         jumps = pct_change[pct_change > _PRICE_JUMP_THRESHOLD].dropna()
         for ts, pct in jumps.items():
-            warnings.append(f"Price anomaly: close-to-close jump of " f"{pct:.1%} at {ts}.")
+            warnings.append(f"Price anomaly: close-to-close jump of {pct:.1%} at {ts}.")
 
     return ValidationResult(
         valid=len(errors) == 0,

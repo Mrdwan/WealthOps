@@ -27,6 +27,12 @@ def _set_required(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(key, value)
 
 
+@pytest.fixture(autouse=True)
+def _block_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: PT004
+    """Prevent load_dotenv from reading the real .env file during tests."""
+    monkeypatch.setattr("trading_advisor.config.dotenv.load_dotenv", lambda: None)
+
+
 # ---------------------------------------------------------------------------
 # load_settings — happy path
 # ---------------------------------------------------------------------------
