@@ -3,8 +3,6 @@
 Tasks: 1C — e.g. DXY=105 with SMA=103 → MacroGate fails; ADX=18 → TrendGate fails.
 """
 
-from __future__ import annotations
-
 
 # Tests will be added in Task 1C.
 # Each guard tested with:

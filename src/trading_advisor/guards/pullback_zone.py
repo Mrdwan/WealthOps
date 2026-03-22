@@ -5,8 +5,6 @@ Filters out chasing extended moves. Only enter near the EMA.
 Implemented in Task 1C.
 """
 
-from __future__ import annotations
-
 from trading_advisor.guards.base import Guard, GuardResult
 
 

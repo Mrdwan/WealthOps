@@ -8,5 +8,3 @@ Tests:
 
 Implemented in Task 1F.
 """
-
-from __future__ import annotations

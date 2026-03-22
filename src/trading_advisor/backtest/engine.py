@@ -10,5 +10,3 @@ Execution model:
 
 Implemented in Task 1E.
 """
-
-from __future__ import annotations
