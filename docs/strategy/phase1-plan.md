@@ -442,13 +442,13 @@ See `Architecture.md` for full deployment details (directory structure, env vars
 ## Task Checklist
 
 ### Task 1A: Data Pipeline
-- [ ] Tiingo API integration (XAU/USD daily OHLCV)
-- [ ] EUR/USD daily data (Tiingo forex, for Macro Gate)
-- [ ] FRED integration (VIX, T10Y2Y, FEDFUNDS)
-- [ ] OHLCV validation rules (high >= low, no nulls, no gaps, etc.)
-- [ ] Parquet storage with incremental updates
-- [ ] Bootstrap script for historical data (5-10 years)
-- [ ] Verify: row counts, date ranges, no gaps on trading days
+- [x] Tiingo API integration (XAU/USD daily OHLCV)
+- [x] EUR/USD daily data (Tiingo forex, for Macro Gate)
+- [x] FRED integration (VIX, T10Y2Y, FEDFUNDS)
+- [x] OHLCV validation rules (high >= low, no nulls, no gaps, etc.)
+- [x] Parquet storage with incremental updates
+- [x] Bootstrap script for historical data (5-10 years)
+- [x] Verify: row counts, date ranges, no gaps on trading days
 
 ### Task 1B: Indicators & Composite
 - [ ] Technical indicators (RSI, EMAs, ADX, ATR, MACD, wick ratios)
