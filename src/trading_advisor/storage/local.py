@@ -37,6 +37,23 @@ class LocalStorage(StorageBackend):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _resolve(self, path: Path) -> Path:
+        """Resolve *path* and verify it is inside ``self._data_dir``.
+
+        Args:
+            path: Candidate filesystem path to validate.
+
+        Returns:
+            The resolved path if it is within the data directory.
+
+        Raises:
+            ValueError: If the resolved path escapes the data directory.
+        """
+        resolved = path.resolve()
+        if not resolved.is_relative_to(self._data_dir.resolve()):
+            raise ValueError(f"Key resolves to a path outside the data directory: {resolved}")
+        return resolved
+
     def _parquet_path(self, key: str) -> Path:
         """Return the full filesystem path for a parquet *key*.
 
@@ -45,8 +62,11 @@ class LocalStorage(StorageBackend):
 
         Returns:
             Absolute path ending in ``.parquet``.
+
+        Raises:
+            ValueError: If the key escapes the data directory.
         """
-        return self._data_dir / f"{key}.parquet"
+        return self._resolve(self._data_dir / f"{key}.parquet")
 
     def _json_path(self, key: str) -> Path:
         """Return the full filesystem path for a JSON *key*.
@@ -56,8 +76,11 @@ class LocalStorage(StorageBackend):
 
         Returns:
             Absolute path ending in ``.json``.
+
+        Raises:
+            ValueError: If the key escapes the data directory.
         """
-        return self._data_dir / f"{key}.json"
+        return self._resolve(self._data_dir / f"{key}.json")
 
     # ------------------------------------------------------------------
     # StorageBackend implementation

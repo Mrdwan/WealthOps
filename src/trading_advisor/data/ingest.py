@@ -92,6 +92,11 @@ class DataIngestor:
             combined = pd.concat([existing, new_data])
             combined = combined[~combined.index.duplicated(keep="last")]
             combined = combined.sort_index()
+            combined_result = self._validator(combined)
+            if not combined_result.valid:
+                raise ValueError(
+                    f"Combined OHLCV validation failed for {symbol!r}: " f"{combined_result.errors}"
+                )
             self._storage.write_parquet(storage_key, combined)
         else:
             self._storage.write_parquet(storage_key, new_data)

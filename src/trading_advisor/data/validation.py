@@ -121,7 +121,11 @@ def validate_ohlcv(df: pd.DataFrame) -> ValidationResult:
     if not null_cols and len(df) > 1:
         close = df["close"]
         prev_close = close.shift(1)
-        pct_change = (close - prev_close).abs() / prev_close
+        nonzero_mask = prev_close != 0
+        pct_change = pd.Series(dtype=float, index=close.index)
+        pct_change[nonzero_mask] = (
+            close[nonzero_mask] - prev_close[nonzero_mask]
+        ).abs() / prev_close[nonzero_mask]
         jumps = pct_change[pct_change > _PRICE_JUMP_THRESHOLD].dropna()
         for ts, pct in jumps.items():
             warnings.append(f"Price anomaly: close-to-close jump of " f"{pct:.1%} at {ts}.")

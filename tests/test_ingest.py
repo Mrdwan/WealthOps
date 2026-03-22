@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -83,9 +85,9 @@ def _make_macro(start: str, periods: int) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def test_fresh_ohlcv_ingest_writes_and_returns_valid(tmp_path: pytest.TempPathFactory) -> None:
+def test_fresh_ohlcv_ingest_writes_and_returns_valid(tmp_path: Path) -> None:
     """Fresh ingest writes data and returns a valid ValidationResult."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     data = _make_ohlcv("2024-01-01", 5)
     ingestor = DataIngestor(
         ohlcv_provider=FakeOHLCVProvider(data),
@@ -101,9 +103,9 @@ def test_fresh_ohlcv_ingest_writes_and_returns_valid(tmp_path: pytest.TempPathFa
     assert len(stored) == len(data)
 
 
-def test_incremental_ohlcv_ingest_appends_new_data(tmp_path: pytest.TempPathFactory) -> None:
+def test_incremental_ohlcv_ingest_appends_new_data(tmp_path: Path) -> None:
     """Incremental ingest only fetches dates after the last stored date."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     existing = _make_ohlcv("2024-01-01", 3)
     new_data = _make_ohlcv("2024-01-08", 3)
     all_data = pd.concat([existing, new_data])
@@ -126,9 +128,9 @@ def test_incremental_ohlcv_ingest_appends_new_data(tmp_path: pytest.TempPathFact
     assert stored.index.is_monotonic_increasing
 
 
-def test_invalid_ohlcv_raises_and_does_not_write(tmp_path: pytest.TempPathFactory) -> None:
+def test_invalid_ohlcv_raises_and_does_not_write(tmp_path: Path) -> None:
     """Invalid OHLCV data raises ValueError and does not write to storage."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     # Create invalid data: high < low
     idx = pd.date_range("2024-01-01", periods=3, freq="B", name="date")
     bad_data = pd.DataFrame(
@@ -153,9 +155,9 @@ def test_invalid_ohlcv_raises_and_does_not_write(tmp_path: pytest.TempPathFactor
     assert not storage.exists("ohlcv/XAUUSD")
 
 
-def test_valid_ohlcv_with_warnings_still_writes(tmp_path: pytest.TempPathFactory) -> None:
+def test_valid_ohlcv_with_warnings_still_writes(tmp_path: Path) -> None:
     """Valid OHLCV data with warnings still writes (valid=True with non-empty warnings)."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     # Create data with a large price jump (>5%) to trigger warnings
     idx = pd.date_range("2024-01-01", periods=2, freq="B", name="date")
     warn_data = pd.DataFrame(
@@ -181,18 +183,25 @@ def test_valid_ohlcv_with_warnings_still_writes(tmp_path: pytest.TempPathFactory
     assert storage.exists("ohlcv/XAUUSD")
 
 
-def test_already_up_to_date_returns_valid_without_fetch(tmp_path: pytest.TempPathFactory) -> None:
+def test_already_up_to_date_returns_valid_without_fetch(tmp_path: Path) -> None:
     """When stored data covers up to end date, returns valid without fetching."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     existing = _make_ohlcv("2024-01-01", 5)
     last_date = existing.index[-1]
     end_date = (last_date - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     storage.write_parquet("ohlcv/XAUUSD", existing)
 
-    # Provider that would fail if called (it won't be called)
+    fetch_call_count = 0
+
+    class CountingOHLCVProvider(OHLCVProvider):
+        def fetch_ohlcv(self, symbol: str, start: str, end: str) -> pd.DataFrame:
+            nonlocal fetch_call_count
+            fetch_call_count += 1
+            return existing
+
     ingestor = DataIngestor(
-        ohlcv_provider=FakeOHLCVProvider(existing),
+        ohlcv_provider=CountingOHLCVProvider(),
         macro_provider=FakeMacroProvider(_make_macro("2024-01-01", 0)),
         storage=storage,
     )
@@ -201,11 +210,13 @@ def test_already_up_to_date_returns_valid_without_fetch(tmp_path: pytest.TempPat
 
     assert result.valid is True
     assert result.errors == []
+    # Provider must NOT be called when data is already up to date
+    assert fetch_call_count == 0
 
 
-def test_empty_fetch_returns_valid_without_writing(tmp_path: pytest.TempPathFactory) -> None:
+def test_empty_fetch_returns_valid_without_writing(tmp_path: Path) -> None:
     """Empty fetch result returns valid ValidationResult without writing."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     empty_data: pd.DataFrame = pd.DataFrame()
 
     ingestor = DataIngestor(
@@ -220,9 +231,9 @@ def test_empty_fetch_returns_valid_without_writing(tmp_path: pytest.TempPathFact
     assert not storage.exists("ohlcv/XAUUSD")
 
 
-def test_ohlcv_dedup_overlapping_dates_keeps_last(tmp_path: pytest.TempPathFactory) -> None:
+def test_ohlcv_dedup_overlapping_dates_keeps_last(tmp_path: Path) -> None:
     """Overlapping dates between existing and new data are deduplicated (keep last)."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     existing = _make_ohlcv("2024-01-01", 5)
     # New data overlaps the last 2 rows of existing
     overlap_start = existing.index[-2].strftime("%Y-%m-%d")
@@ -233,23 +244,66 @@ def test_ohlcv_dedup_overlapping_dates_keeps_last(tmp_path: pytest.TempPathFacto
     new_data["low"] = new_data["low"] + 999.0
     new_data["close"] = new_data["close"] + 999.0
 
-    all_provider_data = pd.concat([existing, new_data])
-    # Provider returns all; existing is already in storage
+    # Provider that always returns new_data ignoring date filters, so that
+    # overlapping rows are present in the fetched result.
+    class OverlapOHLCVProvider(OHLCVProvider):
+        def fetch_ohlcv(self, symbol: str, start: str, end: str) -> pd.DataFrame:
+            return new_data.copy()
+
+    # Existing is already in storage; provider returns new_data (which overlaps)
     storage.write_parquet("ohlcv/XAUUSD", existing)
 
     ingestor = DataIngestor(
-        ohlcv_provider=FakeOHLCVProvider(all_provider_data),
+        ohlcv_provider=OverlapOHLCVProvider(),
         macro_provider=FakeMacroProvider(_make_macro("2024-01-01", 0)),
         storage=storage,
     )
 
-    # Start = 1 day after last existing date => incremental fetch
     result = ingestor.ingest_ohlcv("XAUUSD", "2024-01-01", "2024-12-31", "ohlcv/XAUUSD")
     assert result.valid is True
 
     stored = storage.read_parquet("ohlcv/XAUUSD")
     assert stored.index.duplicated().sum() == 0
     assert stored.index.is_monotonic_increasing
+    # Overlapping rows must have the NEW (shifted) values, not the old ones
+    overlap_idx = new_data.index[new_data.index.isin(existing.index)]
+    for ts in overlap_idx:
+        assert stored.loc[ts, "close"] == pytest.approx(new_data.loc[ts, "close"])
+
+
+def test_combined_data_validation_failure_raises_and_does_not_write(
+    tmp_path: Path,
+) -> None:
+    """When combined (existing + new) data fails validation, raises ValueError without writing."""
+    storage = LocalStorage(tmp_path)
+    # Write corrupted existing data directly (bypassing ingestor validation)
+    idx = pd.date_range("2024-01-01", periods=3, freq="B", name="date")
+    corrupt_existing = pd.DataFrame(
+        {
+            "open": [100.0, 100.0, 100.0],
+            "high": [80.0, 80.0, 80.0],  # high < low — invalid
+            "low": [95.0, 95.0, 95.0],
+            "close": [90.0, 90.0, 90.0],
+        },
+        index=idx,
+    )
+    storage.write_parquet("ohlcv/XAUUSD", corrupt_existing)
+
+    # New data is valid on its own
+    new_data = _make_ohlcv("2024-01-08", 3)
+
+    ingestor = DataIngestor(
+        ohlcv_provider=FakeOHLCVProvider(new_data),
+        macro_provider=FakeMacroProvider(_make_macro("2024-01-01", 0)),
+        storage=storage,
+    )
+
+    with pytest.raises(ValueError):
+        ingestor.ingest_ohlcv("XAUUSD", "2024-01-01", "2024-01-31", "ohlcv/XAUUSD")
+
+    # Storage must still contain only the corrupted existing data (not updated)
+    stored = storage.read_parquet("ohlcv/XAUUSD")
+    assert len(stored) == len(corrupt_existing)
 
 
 # ---------------------------------------------------------------------------
@@ -257,9 +311,9 @@ def test_ohlcv_dedup_overlapping_dates_keeps_last(tmp_path: pytest.TempPathFacto
 # ---------------------------------------------------------------------------
 
 
-def test_fresh_macro_ingest_writes_data(tmp_path: pytest.TempPathFactory) -> None:
+def test_fresh_macro_ingest_writes_data(tmp_path: Path) -> None:
     """Fresh macro ingest writes data to storage."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     macro_data = _make_macro("2024-01-01", 5)
 
     ingestor = DataIngestor(
@@ -275,9 +329,9 @@ def test_fresh_macro_ingest_writes_data(tmp_path: pytest.TempPathFactory) -> Non
     assert len(stored) == len(macro_data)
 
 
-def test_incremental_macro_ingest_appends_new_data(tmp_path: pytest.TempPathFactory) -> None:
+def test_incremental_macro_ingest_appends_new_data(tmp_path: Path) -> None:
     """Incremental macro ingest appends new data after existing."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     existing = _make_macro("2024-01-01", 3)
     new_data = _make_macro("2024-01-08", 3)
     all_data = pd.concat([existing, new_data])
@@ -297,9 +351,9 @@ def test_incremental_macro_ingest_appends_new_data(tmp_path: pytest.TempPathFact
     assert stored.index.is_monotonic_increasing
 
 
-def test_macro_already_up_to_date_returns_early(tmp_path: pytest.TempPathFactory) -> None:
+def test_macro_already_up_to_date_returns_early(tmp_path: Path) -> None:
     """When stored macro data covers end date, returns without fetching."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     existing = _make_macro("2024-01-01", 5)
     last_date = existing.index[-1]
     end_date = (last_date - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
@@ -326,9 +380,9 @@ def test_macro_already_up_to_date_returns_early(tmp_path: pytest.TempPathFactory
     assert call_count == 0
 
 
-def test_macro_empty_fetch_returns_early(tmp_path: pytest.TempPathFactory) -> None:
+def test_macro_empty_fetch_returns_early(tmp_path: Path) -> None:
     """Empty macro fetch returns without writing."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     empty_macro: pd.DataFrame = pd.DataFrame()
 
     ingestor = DataIngestor(
@@ -348,10 +402,10 @@ def test_macro_empty_fetch_returns_early(tmp_path: pytest.TempPathFactory) -> No
 
 
 def test_run_daily_ingest_calls_all_five_and_returns_two_results(
-    tmp_path: pytest.TempPathFactory,
+    tmp_path: Path,
 ) -> None:
     """run_daily_ingest ingests 5 series and returns 2 OHLCV validation results."""
-    storage = LocalStorage(tmp_path)  # type: ignore[arg-type]
+    storage = LocalStorage(tmp_path)
     ohlcv_data = _make_ohlcv("2024-01-01", 5)
     macro_data = _make_macro("2024-01-01", 5)
 

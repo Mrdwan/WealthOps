@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pandas as pd
+import requests
+import requests.exceptions
 from fredapi import Fred
 
 from trading_advisor.data.base import MacroProvider
@@ -51,7 +53,7 @@ class FredProvider(MacroProvider):
                 observation_start=start,
                 observation_end=end,
             )
-        except Exception as exc:
+        except (ValueError, requests.exceptions.RequestException) as exc:
             raise RuntimeError(f"Failed to fetch FRED series '{series_id}': {exc}") from exc
 
         df = raw.to_frame(name="value")

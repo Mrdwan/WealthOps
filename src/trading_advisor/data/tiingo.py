@@ -73,7 +73,7 @@ class TiingoProvider(OHLCVProvider):
         df = pd.DataFrame(data)
         df.columns = pd.Index([str(c).lower() for c in df.columns])
         df = df[_OHLCV_COLUMNS + ["date"]]
-        df["date"] = pd.to_datetime(df["date"], utc=True).dt.tz_localize(None)
+        df["date"] = pd.to_datetime(df["date"], utc=True).dt.tz_convert(None)
         df = df.set_index("date")
         df.index.name = "date"
         df = df.sort_index()

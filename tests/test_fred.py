@@ -67,8 +67,22 @@ def test_data_values_match_canned_response(
 def test_fredapi_error_wrapped_in_runtime_error(
     mock_fred_client: MagicMock,
 ) -> None:
-    """fredapi exception is wrapped in RuntimeError with descriptive message."""
-    mock_fred_client.get_series.side_effect = Exception("FRED API error")
+    """fredapi ValueError is wrapped in RuntimeError with descriptive message."""
+    mock_fred_client.get_series.side_effect = ValueError("FRED API error")
+    provider = FredProvider(api_key="test-api-key", fred_client=mock_fred_client)
+    with pytest.raises(RuntimeError, match="VIXCLS"):
+        provider.fetch_series("VIXCLS", "2024-01-02", "2024-01-05")
+
+
+def test_fredapi_requests_error_wrapped_in_runtime_error(
+    mock_fred_client: MagicMock,
+) -> None:
+    """fredapi requests.RequestException is wrapped in RuntimeError."""
+    import requests
+
+    mock_fred_client.get_series.side_effect = requests.exceptions.RequestException(
+        "connection error"
+    )
     provider = FredProvider(api_key="test-api-key", fred_client=mock_fred_client)
     with pytest.raises(RuntimeError, match="VIXCLS"):
         provider.fetch_series("VIXCLS", "2024-01-02", "2024-01-05")

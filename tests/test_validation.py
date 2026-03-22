@@ -126,3 +126,20 @@ def test_multiple_errors_collected(sample_ohlcv: pd.DataFrame) -> None:
     result = validate_ohlcv(df)
     assert result.valid is False
     assert len(result.errors) >= 2
+
+
+def test_zero_prev_close_does_not_raise(sample_ohlcv: pd.DataFrame) -> None:
+    """A zero prev_close is masked out and does not generate a spurious inf warning."""
+    df = sample_ohlcv.copy()
+    # Set close on row 0 to zero; row 1's pct_change uses row 0 as prev_close
+    df.iloc[0, df.columns.get_loc("close")] = 0.0
+    # Also fix open/high/low to satisfy OHLC constraints with close=0
+    df.iloc[0, df.columns.get_loc("open")] = 0.0
+    df.iloc[0, df.columns.get_loc("high")] = 0.0
+    df.iloc[0, df.columns.get_loc("low")] = 0.0
+    result = validate_ohlcv(df)
+    # Must not raise; the zero-prev-close row must be masked, not produce inf warnings
+    assert isinstance(result.valid, bool)
+    # No warning should contain "inf" or represent a division-by-zero artifact
+    for w in result.warnings:
+        assert "inf" not in w.lower()

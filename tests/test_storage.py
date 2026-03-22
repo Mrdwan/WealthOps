@@ -132,3 +132,43 @@ def test_nested_key_creates_subdirectory_json(tmp_path: Path) -> None:
     assert expected_path.exists()
     result = storage.read_json("signals/daily")
     assert result == data
+
+
+# ---------------------------------------------------------------------------
+# LocalStorage — path traversal guard
+# ---------------------------------------------------------------------------
+
+
+def test_write_parquet_path_traversal_raises(tmp_path: Path) -> None:
+    """write_parquet raises ValueError when key escapes data_dir via '..'."""
+    storage = LocalStorage(data_dir=tmp_path)
+    with pytest.raises(ValueError, match="outside"):
+        storage.write_parquet("../../etc/passwd", _make_df())
+
+
+def test_read_parquet_path_traversal_raises(tmp_path: Path) -> None:
+    """read_parquet raises ValueError when key escapes data_dir via '..'."""
+    storage = LocalStorage(data_dir=tmp_path)
+    with pytest.raises(ValueError, match="outside"):
+        storage.read_parquet("../../etc/passwd")
+
+
+def test_write_json_path_traversal_raises(tmp_path: Path) -> None:
+    """write_json raises ValueError when key escapes data_dir via '..'."""
+    storage = LocalStorage(data_dir=tmp_path)
+    with pytest.raises(ValueError, match="outside"):
+        storage.write_json("../../etc/config", {"key": "value"})
+
+
+def test_read_json_path_traversal_raises(tmp_path: Path) -> None:
+    """read_json raises ValueError when key escapes data_dir via '..'."""
+    storage = LocalStorage(data_dir=tmp_path)
+    with pytest.raises(ValueError, match="outside"):
+        storage.read_json("../../etc/config")
+
+
+def test_exists_path_traversal_raises(tmp_path: Path) -> None:
+    """exists raises ValueError when key escapes data_dir via '..'."""
+    storage = LocalStorage(data_dir=tmp_path)
+    with pytest.raises(ValueError, match="outside"):
+        storage.exists("../../etc/passwd")
