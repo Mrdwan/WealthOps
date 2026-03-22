@@ -1,21 +1,23 @@
 {
   "permissions": {
-    "deny": ["EnterPlanMode"],
+    "deny": [
+      "EnterPlanMode",
+      "Bash(git push:*)",
+      "Bash(git add -A:*)",
+      "Bash(git add .:*)",
+      "Edit(.env)"
+    ],
     "allow": [
       "Bash(date:*)",
-      "Bash(echo:*)",
-      "Bash(cat:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
-      "Bash(head:*)",
-      "Bash(tail:*)",
-      "Bash(grep:*)",
-      "Bash(find:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git status:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
       "Bash(uv:*)",
       "Bash(uv run:*)",
       "Bash(uv add:*)",
@@ -29,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ruff check --fix . 2>/dev/null; uv run ruff format . 2>/dev/null; true"
+            "command": "uv run ruff check --fix . && uv run ruff format ."
           }
         ]
       }

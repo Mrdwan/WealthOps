@@ -15,42 +15,20 @@ Run the full pipeline without stopping for approval:
 ### 1. Understand the task
 Read the user's request. If anything is ambiguous, make a reasonable decision and document it in the plan. Do NOT ask questions — this is autonomous.
 
-## 2: Plan
+### 2. Plan
 
-Write `docs/PLAN.md` containing:
-
-```markdown
-# Plan: [Feature Name]
-
-## Goal
-[One paragraph]
-
-## File Map
-- `src/...` — responsibility
-- `tests/...` — tests for above
-
-## Tasks
-
-### Task 1: [Short name]
-- **Files**: [exact paths]
-- **Action**: [explicit instructions — self-contained, no assumed context]
-- **Test**: [what test to write first, what to assert]
-- **Verify**: `uv run pytest tests/test_x.py -v --no-cov`
-- **Done when**: [concrete criteria]
-- [ ] Completed
-```
+Write `docs/PLAN.md` with a Goal, File Map, and Tasks (same format as `/build`). Add a **Decisions** section documenting any ambiguities you resolved autonomously.
 
 ### 3. Execute
 For each task in dependency order:
 
-1. Prepare task prompt for the `implementer` agent (full task description + file contents inline).
+1. Prepare task prompt for the `implementer` agent (full task description + file paths to read — NOT inline content).
 2. Dispatch: "Use the implementer agent to: [full task prompt]"
-3. Review result — check tests, run `uv run ruff check .` and `uv run mypy src/`.
+3. Review result — check tests, ruff, and mypy output from the implementer.
 4. If failed, re-dispatch.
 5. Commit:
    ```bash
-   uv run ruff check --fix . && uv run ruff format .
-   git add -A
+   git add [specific files]
    git commit -m "type: [task short name]"
    ```
 6. Mark complete in docs/PLAN.md, next task.
@@ -60,14 +38,16 @@ Use the `reviewer` agent. Fix CRITICAL and BUG issues. Re-review if needed.
 
 Run full checks:
 ```bash
-uv run pytest
 uv run mypy --strict src/
-uv run ruff check .
+uv run pytest --cov --cov-branch --cov-fail-under=100
 ```
+Ruff runs automatically via the Stop hook — do not run it manually.
 
 ### 5. Finalize
 
-Commit any remaining changes. Then report to the user:
+1. Update `docs/progress.md` (add activity row, check off tasks, resolve open questions).
+2. Commit any remaining changes.
+3. Report to the user:
 
 ```
 Branch `feat/[name]` is ready for review.
@@ -84,6 +64,7 @@ To review: git diff main..feat/[name]
 ## Rules
 
 - **No questions.** Make reasonable decisions and document them.
-- **Every ambiguity gets logged** in docs/PLAN.md under a "Decisions" section so the user sees what you chose during PR review.
+- **Every ambiguity gets logged** in docs/PLAN.md under a "Decisions" section.
 - **Never commit to main.** Everything goes on the feature branch.
+- **Stage files explicitly.** Never use `git add -A` or `git add .`.
 - **If something is fundamentally blocked** (missing dependency, can't determine requirements), stop and explain what's blocking. Don't guess on architecture.

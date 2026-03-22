@@ -13,14 +13,15 @@ Do NOT use for: new features, architectural changes, anything touching more than
 3. **Make the change.**
 4. **Verify:**
    ```bash
-   uv run pytest
    uv run mypy --strict src/
+   uv run pytest --cov --cov-branch --cov-fail-under=100
    ```
+   Ruff runs automatically via the Stop hook — do not run it manually.
 5. **Commit:**
    ```bash
-   uv run ruff check --fix . && uv run ruff format .
-   git add -A
+   git add [specific files]
    git commit -m "type: short description"
    ```
+6. **Update `docs/progress.md`** if the change is meaningful (bug fix, completed task item).
 
 If mid-task you realize it's bigger than expected: STOP. Tell the user it needs `/build`.

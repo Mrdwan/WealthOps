@@ -39,9 +39,7 @@ Write `docs/PLAN.md` containing:
 
 Every task must be self-contained enough for the `implementer` agent to execute with zero project context beyond what you give it.
 
-Send the plan to the `plan-reviewer` agent: "Use the plan-reviewer agent to review docs/PLAN.md against the requirements."
-
-Fix any issues it finds.
+Review the plan yourself for completeness and consistency before presenting it.
 
 ## <CHECKPOINT>
 
@@ -56,20 +54,20 @@ For each task in dependency order:
 
 1. **Prepare a task prompt** for the `implementer` agent. Include:
    - The exact task description (copy it — don't reference the plan file)
-   - Current content of files being modified (inline)
+   - File paths to read (NOT inline content — the implementer reads files itself)
    - Test and verify instructions
 
 2. **Dispatch**: "Use the implementer agent to: [full task prompt]"
 
 3. **Review the result**:
    - Check test output passes
-   - Run `uv run ruff check .` and `uv run mypy src/` — fix any issues
+   - Check ruff and mypy output from the implementer
+   - If the implementer didn't run mypy or ruff, run them yourself: `uv run ruff check . && uv run mypy --strict src/`
    - If failed, fix yourself or re-dispatch. Do not skip.
 
 4. **Commit**:
    ```bash
-   uv run ruff check --fix . && uv run ruff format .
-   git add -A
+   git add [specific files]
    git commit -m "type: [task short name]"
    ```
 
@@ -83,17 +81,22 @@ After all tasks are done:
 2. If it finds CRITICAL or BUG issues, fix them via the `implementer` agent, then re-review.
 3. Run the full check:
    ```bash
-   uv run pytest
    uv run mypy --strict src/
-   uv run ruff check .
+   uv run pytest --cov --cov-branch --cov-fail-under=100
    ```
+   Ruff runs automatically via the Stop hook — do not run it manually.
 
 ## Phase 5: Report
 
-Tell the user:
-- What was built (files created/modified)
-- Decisions made during implementation
-- Test results and coverage
-- Any issues found and how they were resolved
+1. Update `docs/progress.md`:
+   - Add a row to the Recent Activity table with today's date and what was built
+   - Check off completed items in the Task Checklist
+   - Move any resolved open questions to Decisions Made
+
+2. Tell the user:
+   - What was built (files created/modified)
+   - Decisions made during implementation
+   - Test results and coverage
+   - Any issues found and how they were resolved
 
 Done.

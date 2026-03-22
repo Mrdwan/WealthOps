@@ -38,4 +38,4 @@ This session is THINKING ONLY. The moment you touch code, you have failed. If th
 
 ## When done
 
-Tell the user: "Spec saved to docs/SPEC.md. Review it, then run `/plan` when ready."
+Tell the user: "Spec saved to docs/SPEC.md. Review it, then run `/build` when ready to plan and implement."
