@@ -36,7 +36,8 @@ Project docs live in `docs/`. Only read what's relevant:
 
 | If your task involves... | Read... |
 |--------------------------|---------|
-| Session start / what to work on next | `docs/progress.md` |
+| Session start / what to work on next | `docs/PROGRESS.md` |
+| Resuming a planned feature | `docs/plans/` (check for existing spec/plan) |
 | Data pipeline, indicators, guards, signals, backtest | `docs/strategy/phase1-plan.md` (relevant task section only) |
 | System design, directory structure, deployment | `docs/architecture.md` |
 | Writing any code | `docs/coding-standards.md` |
@@ -51,6 +52,12 @@ When dispatching to the implementer, give file paths — not file contents. The 
 
 Only use the `reviewer` sub-agent after all implementation is complete.
 
+After 2 failed attempts on the same task, stop, report the blocker, and ask the user. Do not loop.
+
+For risky or experimental tasks, use `isolation: "worktree"` when dispatching to the implementer. This gives it an isolated copy of the repo. Review changes before merging.
+
 ## Context Management
 
 **Compact at logical breakpoints, not when the window is full.** Compact after finishing a module before starting the next, after a failed approach before trying a new one. Don't compact mid-implementation.
+
+When compacting, preserve: modified file list, test results, type-check results, current task status in the active plan file, key decisions made. Discard exploration output, failed approaches, verbose tool output.

@@ -5,6 +5,10 @@
       "Bash(git push:*)",
       "Bash(git add -A:*)",
       "Bash(git add .:*)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -r:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git checkout -- :*)",
       "Edit(.env)"
     ],
     "allow": [

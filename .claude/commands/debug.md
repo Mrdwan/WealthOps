@@ -33,14 +33,15 @@ Apply the minimal fix that addresses the root cause.
 - Fix the root cause, not the symptom
 - Do not refactor unrelated code while debugging
 - Write a test that would have caught this bug (fails without fix, passes with fix)
-- If the fix is larger than expected, stop and tell the user — it may need its own /plan cycle
+- If the fix is larger than expected, stop and tell the user — it may need its own /build cycle
 
 ## Phase 4: Verify
 
 - Run the reproduction steps again — the bug should be gone
 - Run the new test — it should pass
-- Run the full test suite — nothing else should break
+- Run the full verification commands from CLAUDE.md — nothing else should break
 - Commit with message: `fix: [what was wrong and why]`
+- Update `docs/PROGRESS.md` if the bug fix is meaningful
 
 ## Rules
 

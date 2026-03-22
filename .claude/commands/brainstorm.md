@@ -15,27 +15,27 @@ You are starting a brainstorming session. Your goal is to understand what the us
 
 3. **Challenge assumptions.** If the user's approach has obvious flaws or there's a simpler way, say so. Propose alternatives. This is the cheapest time to change direction.
 
-4. **Write SPEC.md.** Once the design is agreed, write `docs/SPEC.md` containing:
+4. **Write the spec.** Once the design is agreed, derive a feature slug from the feature name (e.g., "Guard System" → `guard-system`). Write `docs/plans/<feature-slug>.spec.md` containing:
    - **Goal**: one paragraph on what this achieves
    - **Requirements**: numbered list of what must be true when done
    - **Technical approach**: how it will be built (architecture, key decisions)
    - **Out of scope**: what this does NOT cover
-   - **Open questions**: anything unresolved (should be empty before moving to /plan)
+   - **Open questions**: anything unresolved (should be empty before moving to /build)
 
 ## <HARD-GATE>
 
 **YOU ARE FORBIDDEN FROM:**
 - Writing any implementation code
-- Creating any project files (except docs/SPEC.md)
+- Creating any project files (except the spec in `docs/plans/`)
 - Running scaffolding commands (npm init, django-admin, etc.)
 - Suggesting "let me just quickly set that up"
 - Invoking any implementation tools
 
-This session is THINKING ONLY. The moment you touch code, you have failed. If the user asks you to "just start coding," remind them to run `/plan` first after the spec is approved.
+This session is THINKING ONLY. The moment you touch code, you have failed. If the user asks you to "just start coding," remind them to run `/build` first after the spec is approved.
 
-**The ONLY file you create is docs/SPEC.md.**
+**The ONLY file you create is `docs/plans/<feature-slug>.spec.md`.**
 </HARD-GATE>
 
 ## When done
 
-Tell the user: "Spec saved to docs/SPEC.md. Review it, then run `/build` when ready to plan and implement."
+Tell the user: "Spec saved to `docs/plans/<feature-slug>.spec.md`. Review it, then run `/build` when ready to plan and implement."
