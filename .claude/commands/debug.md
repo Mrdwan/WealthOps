@@ -2,6 +2,10 @@
 
 You are debugging an issue. Follow this systematic process. Do NOT jump to solutions.
 
+## Phase 0: Branch Check
+
+Before starting, verify you're not on main (`git branch --show-current`). If on main, tell the user to create a feature branch first. Do not proceed until on a feature branch.
+
 ## Phase 1: Reproduce
 
 Before anything else, reproduce the bug reliably.
@@ -41,7 +45,7 @@ Apply the minimal fix that addresses the root cause.
 - Run the new test — it should pass
 - Run the full verification commands from CLAUDE.md — nothing else should break
 - Commit with message: `fix: [what was wrong and why]`
-- Update `docs/PROGRESS.md` if the bug fix is meaningful
+- Update the relevant plan file if the bug fix completes a tracked item
 
 ## Rules
 

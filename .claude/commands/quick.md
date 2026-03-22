@@ -8,6 +8,7 @@ Do NOT use for: new features, architectural changes, anything touching more than
 
 ## Process
 
+0. **Branch check:** `git branch --show-current`. If on main, stop and tell the user to create a feature branch first. Do not proceed.
 1. **State what you're doing** in one sentence. If it takes more than one sentence, use `/build`.
 2. **Write the test first** (if applicable).
 3. **Make the change.**
@@ -17,6 +18,6 @@ Do NOT use for: new features, architectural changes, anything touching more than
    git add [specific files]
    git commit -m "type: short description"
    ```
-6. **Update `docs/PROGRESS.md`** if the change is meaningful (bug fix, completed task item).
+6. **Update the relevant plan file** if the change completes a tracked task or fixes a tracked bug.
 
 If mid-task you realize it's bigger than expected: STOP. Tell the user it needs `/build`.

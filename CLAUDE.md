@@ -35,6 +35,13 @@ Ruff runs automatically via the Stop hook — do not run it manually.
 - Format: `type: short description` (feat, fix, refactor, test, docs)
 - Stage files explicitly by name. Do not use `git add -A` or `git add .`.
 
+## Branching
+
+All work happens on feature branches. Never commit directly to main.
+- `/build` auto mode creates the branch automatically.
+- For `/quick`, `/debug`, or manual work: check your branch before starting. If on main, create a feature branch first: `git checkout -b type/short-name`
+- This is enforced by a PreToolUse hook — commits to main will be blocked.
+
 ## File Map
 
 Project docs live in `docs/`. Only read what's relevant:
@@ -54,7 +61,7 @@ Do NOT load all docs at once. Load only what the current task requires.
 
 When dispatching to the implementer, give file paths — not file contents. The implementer can read files itself.
 
-Only use the `reviewer` sub-agent after all implementation is complete.
+Use the `reviewer` sub-agent after each implementer task to check code quality and test meaningfulness via mutation testing.
 
 After 2 failed attempts on the same task, stop, report the blocker, and ask the user. Do not loop.
 

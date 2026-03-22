@@ -64,6 +64,8 @@ Review the plan yourself for completeness and consistency before presenting it.
 
 ## Phase 3: Execute
 
+**Before the first commit in this session:** verify you're on a feature branch (`git branch --show-current`). If on main, create one: `git checkout -b feat/<feature-slug>`. In auto mode, this was already done. In interactive mode, ask the user if unsure about the branch name.
+
 For each task in dependency order:
 
 1. **Prepare a task prompt** for the `implementer` agent. Include:
@@ -73,35 +75,41 @@ For each task in dependency order:
 
 2. **Dispatch**: "Use the implementer agent to: [full task prompt]"
 
-3. **Review the result**:
-   - Check test output passes
-   - Check mypy output from the implementer
-   - If the implementer didn't run checks, run them yourself (see CLAUDE.md for verification commands)
-   - After 2 failed dispatches for the same task, stop and report the blocker. Do not loop.
+3. **Review the result**: Check test and mypy output from the implementer. If the implementer didn't run verification, run the commands from CLAUDE.md. After 2 failed dispatches for the same task, stop and report the blocker.
 
-4. **Commit**:
+4. **Review**: Use the `reviewer` agent. Tell it exactly which files the implementer created/modified (both source and test files). It will:
+   - Review code quality and best practices
+   - Check whether tests are meaningful
+   - Mutate the implementation to see if tests actually catch real bugs
+   - Report a mutation score and verdict
+
+   If the reviewer returns **NEEDS FIX**: dispatch the implementer again with the reviewer's findings (specific tests to add or strengthen, bugs to fix). Then re-review. After 2 rounds of fix → review, stop and report the blocker.
+
+   If the reviewer returns **PASS**: proceed to commit.
+
+5. **Commit**:
    ```bash
    git add [specific files]
    git commit -m "type: [task short name]"
    ```
 
-5. **Mark complete** in the plan file, move to next task.
+6. **Mark complete** in the plan file, move to next task.
 
 If you need to explore multiple parts of the codebase before planning, use parallel Explore agents (background) to investigate independently. Synthesize their findings before planning.
 
-## Phase 4: Review
+## Phase 4: Final Verification
 
-After all tasks are done:
+Run the full verification commands from CLAUDE.md (mypy + pytest with coverage). Each task was already verified individually — this is the integration check.
 
-1. Use the `reviewer` agent. Tell it exactly which files to review (list the files created/modified during execution).
-2. If it finds CRITICAL or BUG issues, fix them, then re-review.
-3. Run the full verification commands from CLAUDE.md.
+If this fails:
+- Identify which task(s) broke integration.
+- If it's a simple fix (import error, missing re-export), dispatch the implementer.
+- If it's an architectural conflict between tasks, stop and report to the user.
+- Never revert commits without user approval.
 
 ## Phase 5: Report
 
-1. Update `docs/strategy/phase1-plan.md`:
-   - Check off completed items in the Task Checklist
-   - Move any resolved open questions to Decisions
+1. Update the phase plan file (the one used in Phase 1) — check off completed items in the Task Checklist and move resolved open questions to Decisions.
 
 2. Tell the user:
    - What was built (files created/modified)

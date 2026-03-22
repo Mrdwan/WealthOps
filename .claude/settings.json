@@ -10,6 +10,8 @@
       "Bash(git reset --hard:*)",
       "Bash(git checkout -- :*)",
       "Bash(git checkout .:*)",
+      "Bash(git restore:*)",
+      "Bash(git restore .:*)",
       "Edit(.env)"
     ],
     "allow": [
@@ -21,21 +23,37 @@
       "Bash(git status:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",
-      "Bash(git checkout:*)",
+      "Bash(git checkout -b:*)",
       "Bash(git branch:*)",
       "Bash(uv:*)",
       "Bash(wc:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(git switch:*)"
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "branch=$(git branch --show-current) && [ \"$branch\" != \"main\" ] && [ \"$branch\" != \"master\" ] || (echo 'BLOCKED: Cannot commit to main/master. Create a feature branch first.' && exit 1)"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ruff check --fix . && uv run ruff format ."
+            "command": "uv run ruff check --fix ."
+          },
+          {
+            "type": "command",
+            "command": "uv run ruff format ."
           }
         ]
       }
