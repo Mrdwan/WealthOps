@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from trading_advisor.data.base import DataProvider
+from trading_advisor.data.base import OHLCVProvider
 
 
-class FredProvider(DataProvider):
+class FredProvider(OHLCVProvider):
     """Fetches macro data series from the FRED API."""
 
     def fetch_ohlcv(self, symbol: str, start: str, end: str) -> pd.DataFrame:
