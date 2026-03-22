@@ -1,24 +1,38 @@
 {
   "permissions": {
+    "deny": ["EnterPlanMode"],
     "allow": [
-      "Read",
-      "Write",
-      "Edit",
-      "Bash(ruff check *)",
-      "Bash(ruff format *)",
-      "Bash(mypy *)",
-      "Bash(pytest *)",
-      "Bash(uv *)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(git add*)",
-      "Glob",
-      "Grep"
+      "Bash(date:*)",
+      "Bash(echo:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(uv:*)",
+      "Bash(uv run:*)",
+      "Bash(uv add:*)",
+      "Bash(uv sync:*)"
     ]
   },
-  "env": {
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "10",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run ruff check --fix . 2>/dev/null; uv run ruff format . 2>/dev/null; true"
+          }
+        ]
+      }
+    ]
   }
 }
