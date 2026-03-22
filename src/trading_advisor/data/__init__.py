@@ -1,7 +1,5 @@
 """Data providers package."""
 
-from __future__ import annotations
-
 from trading_advisor.data.base import MacroProvider, OHLCVProvider
 from trading_advisor.data.fred import FredProvider
 from trading_advisor.data.ingest import DataIngestor

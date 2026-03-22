@@ -1,7 +1,5 @@
 """FRED API data provider — VIX, T10Y2Y, FEDFUNDS macro data."""
 
-from __future__ import annotations
-
 import pandas as pd
 import requests
 import requests.exceptions

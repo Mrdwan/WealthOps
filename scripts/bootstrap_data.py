@@ -5,5 +5,3 @@ Run once before starting backtests:
 
 Implemented in Task 1A.
 """
-
-from __future__ import annotations

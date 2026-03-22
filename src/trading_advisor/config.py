@@ -4,8 +4,6 @@ Exposes a `Settings` frozen dataclass populated from environment variables
 (with a `WEALTHOPS_` prefix), and factory helpers for storage backends.
 """
 
-from __future__ import annotations
-
 import os
 from dataclasses import dataclass, field
 from pathlib import Path

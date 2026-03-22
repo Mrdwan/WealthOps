@@ -5,5 +5,3 @@ Charts: equity curve (plotly), monthly returns heatmap (matplotlib).
 
 Implemented in Task 1F.
 """
-
-from __future__ import annotations

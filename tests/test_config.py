@@ -1,7 +1,5 @@
 """Tests for config module: Settings dataclass and factory functions."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

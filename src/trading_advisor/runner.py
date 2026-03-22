@@ -5,8 +5,6 @@ Commands:
   wealthops briefing  — send daily briefing (09:00 UTC cron)
 """
 
-from __future__ import annotations
-
 import datetime
 import sys
 

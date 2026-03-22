@@ -4,8 +4,6 @@ Provides :func:`validate_ohlcv` which inspects a DataFrame for structural and
 logical integrity before it is consumed by strategy code.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import pandas as pd

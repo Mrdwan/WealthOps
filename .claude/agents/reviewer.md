@@ -13,7 +13,6 @@ You are a code reviewer. You review finished implementation for issues the imple
 
 - Dependency injection via constructor — no module-level singletons or global state
 - `frozen=True` dataclasses for value objects, mutable only when state genuinely changes
-- `from __future__ import annotations` in every file
 - All functions fully typed — no `Any` without justification
 - Depend on ABCs, not concretions (e.g., `StorageBackend`, not `LocalStorage`)
 

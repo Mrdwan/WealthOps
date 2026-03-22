@@ -7,5 +7,3 @@ Outputs: metrics, equity curve, monthly heatmap, trade log.
 
 Implemented in Tasks 1E + 1F.
 """
-
-from __future__ import annotations

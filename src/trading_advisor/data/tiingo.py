@@ -1,7 +1,5 @@
 """Tiingo API data provider — XAU/USD and forex daily OHLCV."""
 
-from __future__ import annotations
-
 import pandas as pd
 import requests
 

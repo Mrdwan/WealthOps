@@ -1,7 +1,5 @@
 """Data ingest pipeline — orchestrates OHLCV and macro data fetching and storage."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 import pandas as pd

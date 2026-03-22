@@ -1,7 +1,5 @@
 """Abstract base classes for market data and macro data providers."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 
 import pandas as pd
