@@ -236,10 +236,12 @@ class TestComputeMacdHistogram:
             compute_macd_histogram(close, fast=5, slow=3)
 
     def test_invalid_period_raises(self) -> None:
-        """fast=0 or signal=0 must raise ValueError."""
+        """fast=0, slow=0, or signal=0 must raise ValueError."""
         close = pd.Series([1.0, 2.0, 3.0], dtype=np.float64)
         with pytest.raises(ValueError):
             compute_macd_histogram(close, fast=0, slow=3, signal=2)
+        with pytest.raises(ValueError):
+            compute_macd_histogram(close, fast=1, slow=0, signal=2)
         with pytest.raises(ValueError):
             compute_macd_histogram(close, fast=1, slow=3, signal=0)
 
@@ -350,6 +352,18 @@ class TestComputeAdx:
         with pytest.raises(ValueError, match="period must be >= 2"):
             compute_adx(high, low, close, period=0)
 
+    def test_short_data_adx_all_nan(self) -> None:
+        """Data with DI but not enough for ADX produces all-NaN ADX column."""
+        # period=3, need n > 3 for DI, but 2*3-1=5 for ADX. Use 4 rows.
+        high = pd.Series([12.0, 14.0, 16.0, 15.0], dtype=np.float64)
+        low = pd.Series([8.0, 9.0, 11.0, 10.0], dtype=np.float64)
+        close = pd.Series([10.0, 13.0, 15.0, 12.0], dtype=np.float64)
+        result = compute_adx(high, low, close, period=3)
+        # DI values exist at index 3, but ADX needs index 5 which doesn't exist
+        assert result["adx"].isna().all()
+        # DI should have some valid values
+        assert not result["plus_di"].isna().all()
+
     def test_returns_dataframe_columns(self) -> None:
         """Return value is a DataFrame with columns plus_di, minus_di, adx."""
         high = pd.Series([12.0, 14.0, 16.0, 15.0, 17.0], dtype=np.float64)
@@ -413,6 +427,14 @@ class TestComputeAtr:
         close = pd.Series([1.0, 2.0], dtype=np.float64)
         with pytest.raises(ValueError, match="period must be >= 1"):
             compute_atr(close, close, close, period=0)
+
+    def test_short_data_all_nan(self) -> None:
+        """Data shorter than period produces all-NaN ATR."""
+        high = pd.Series([12.0, 14.0, 16.0], dtype=np.float64)
+        low = pd.Series([8.0, 9.0, 11.0], dtype=np.float64)
+        close = pd.Series([10.0, 13.0, 15.0], dtype=np.float64)
+        result = compute_atr(high, low, close, period=5)
+        assert result.isna().all()
 
     def test_volatile_higher_than_flat(self) -> None:
         """Volatile data should have higher ATR than stable (flat-range) data."""
