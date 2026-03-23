@@ -46,3 +46,58 @@ def compute_rsi(close: pd.Series, period: int = 14) -> pd.Series:
             result.iloc[i] = 100.0 - 100.0 / (1.0 + rs)
 
     return result
+
+
+def compute_ema(series: pd.Series, span: int) -> pd.Series:
+    """Compute Exponential Moving Average.
+
+    Uses pandas ewm with ``adjust=False`` (recursive formula).
+    Multiplier = 2 / (span + 1). EMA[0] = series[0].
+
+    Args:
+        series: Input price series.
+        span: EMA period (e.g., 8, 20, 50).
+
+    Returns:
+        EMA series. All values are valid (no NaN warmup).
+
+    Raises:
+        ValueError: If span is less than 1.
+    """
+    if span < 1:
+        raise ValueError(f"span must be >= 1, got {span}")
+    return series.ewm(span=span, adjust=False).mean()
+
+
+def compute_sma(series: pd.Series, window: int) -> pd.Series:
+    """Compute Simple Moving Average.
+
+    Args:
+        series: Input price series.
+        window: Rolling window size (e.g., 50, 200).
+
+    Returns:
+        SMA series. First ``window - 1`` values are NaN.
+
+    Raises:
+        ValueError: If window is less than 1.
+    """
+    if window < 1:
+        raise ValueError(f"window must be >= 1, got {window}")
+    return series.rolling(window=window).mean()
+
+
+def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> pd.Series:
+    """Check if EMAs are in bullish fan alignment.
+
+    Bullish fan: EMA_8 > EMA_20 > EMA_50 (short-term leads).
+
+    Args:
+        ema_8: 8-period EMA.
+        ema_20: 20-period EMA.
+        ema_50: 50-period EMA.
+
+    Returns:
+        Boolean Series: True when EMA_8 > EMA_20 > EMA_50.
+    """
+    return (ema_8 > ema_20) & (ema_20 > ema_50)
