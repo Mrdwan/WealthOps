@@ -300,7 +300,7 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 ## Current Status
 
-**Active task:** Not started
+**Active task:** Task 1C (Guards)
 **Blockers:** None
 **Last updated:** 2026-03-23
 
@@ -363,98 +363,98 @@ Everything depends on these. Build before any feature work.
 
 #### Technical Indicators
 
-- [ ] **1B.1 — RSI(14)**
+- [x] **1B.1 — RSI(14)**
   - Wilder's RSI in `indicators/technical.py`
   - First indicator — establishes module structure and test patterns
   - Unit tests with hand-calculated values
 
-- [ ] **1B.2 — EMAs (8, 20, 50) + EMA Fan**
+- [x] **1B.2 — EMAs (8, 20, 50) + EMA Fan**
   - EMA_8, EMA_20, EMA_50
   - EMA Fan boolean: `EMA_8 > EMA_20 > EMA_50`
   - Unit tests: each EMA + fan true/false cases
 
-- [ ] **1B.3 — SMAs (50, 200)**
+- [x] **1B.3 — SMAs (50, 200)**
   - SMA_50, SMA_200 (simple moving averages, NOT exponential)
   - Separate from EMAs — used by the Trend composite component
   - Unit tests: SMA_50 = mean of last 50 closes, verify exactly
 
-- [ ] **1B.4 — MACD Histogram**
+- [x] **1B.4 — MACD Histogram**
   - EMA_12, EMA_26, Signal line (9-period EMA of MACD)
   - Histogram = MACD - Signal
   - Unit tests with known values
 
-- [ ] **1B.5 — ADX(14)**
+- [x] **1B.5 — ADX(14)**
   - +DI, -DI, DX, smoothed ADX (Wilder's smoothing)
   - Most complex indicator — test thoroughly
   - Unit tests with known values, edge case: flat price → ADX near 0
 
-- [ ] **1B.6 — ATR(14)**
+- [x] **1B.6 — ATR(14)**
   - True Range = max(high-low, abs(high-prev_close), abs(low-prev_close))
   - ATR = Wilder's smoothed average over 14 periods
   - Unit tests with hand-calculated values
 
-- [ ] **1B.7 — Wick Ratios + Distance from 20d Low**
+- [x] **1B.7 — Wick Ratios + Distance from 20d Low**
   - Upper wick: `(High - max(Open, Close)) / (High - Low)`
   - Lower wick: `(min(Open, Close) - Low) / (High - Low)`
   - Edge case: `High == Low` → both = 0.0
   - Distance from 20d low: `(Close - min(Low, 20d)) / Close`
   - Unit tests including edge cases
 
-- [ ] **1B.8 — Relative Strength vs USD**
+- [x] **1B.8 — Relative Strength vs USD**
   - Rolling 20d z-score of `XAU_close / EURUSD_close` ratio
   - Requires EUR/USD data from storage
   - Unit tests with synthetic data
 
-- [ ] **1B.9 — Indicator assembly function**
+- [x] **1B.9 — Indicator assembly function**
   - `compute_all_indicators(ohlcv_df, eurusd_df) → DataFrame` with all 14 features
   - Wires 1B.1–1B.8 into a single function
   - Integration test: real data → no NaNs after warmup, all 14 columns present
 
-- [ ] **1B.10 — TradingView verification**
+- [x] **1B.10 — TradingView verification**
   - Script that prints RSI, EMA_8, SMA_200, ADX, ATR for 5 random dates
   - Side-by-side format for manual comparison against TradingView
 
 #### Momentum Composite
 
-- [ ] **1B.11 — Rolling z-score utility**
+- [x] **1B.11 — Rolling z-score utility**
   - `rolling_zscore(series, window=252) → Series`
   - All 5 components depend on this
   - Edge cases: insufficient history → NaN, zero std dev → NaN
   - Unit tests: known distributions, edge cases
 
-- [ ] **1B.12 — Momentum component (44%)**
+- [x] **1B.12 — Momentum component (44%)**
   - `momentum_raw = close[t-21] / close[t-126] - 1`
   - Z-score via 1B.11
   - Unit tests: trending → positive, flat → near zero
 
-- [ ] **1B.13 — Trend component (22%)**
+- [x] **1B.13 — Trend component (22%)**
   - `trend_raw = (close > SMA_50) + (close > SMA_200) + (SMA_50 > SMA_200)` → 0 to 3
   - Z-score via 1B.11
   - Unit tests: golden cross + price above both → 3, death cross + below → 0
 
-- [ ] **1B.14 — RSI filter component (17%)**
+- [x] **1B.14 — RSI filter component (17%)**
   - `rsi_raw = 50 - abs(RSI_14 - 50)` → 0 to 50
   - Z-score via 1B.11
   - Unit tests: RSI=50 → max, RSI=80 → low
 
-- [ ] **1B.15 — ATR volatility component (11%)**
+- [x] **1B.15 — ATR volatility component (11%)**
   - `atr_percentile = percentile_rank(ATR_14, 252d window)`
   - `atr_raw = 1 - abs(atr_percentile - 50) / 50` → 0.0 to 1.0
   - Z-score via 1B.11
   - Unit tests: median ATR → 1.0, extreme → near 0
 
-- [ ] **1B.16 — Support/Resistance proximity component (6%)**
+- [x] **1B.16 — Support/Resistance proximity component (6%)**
   - `sr_raw = 1 - (high_20d - close) / close` Only upside proximity (long-only strategy). Proximity to 20d low is not rewarded.
   - Z-score via 1B.11
   - Unit tests: close at 20d high → 1.0, close 2% below → 0.98, close far below → lower
 
-- [ ] **1B.17 — Composite assembly + signal classification**
+- [x] **1B.17 — Composite assembly + signal classification**
   - Weighted sum: `mom×0.44 + trend×0.22 + rsi×0.17 + atr×0.11 + sr×0.06`
   - Thresholds: STRONG_BUY >2.0σ, BUY >1.5σ, NEUTRAL, SELL <-1.5σ, STRONG_SELL <-2.0σ
   - Integration test: all components end-to-end with real data
   - Unit tests: threshold edge cases (exactly 1.5, exactly 2.0)
 
-- [ ] **1B.18 — Pullback threshold validation**
+- [x] **1B.18 — Pullback threshold validation**
   - Plot histogram of `(Close - EMA_8) / EMA_8` across all historical gold data
   - Determine % of days within 2%. Output: histogram + summary stats.
   - Informs whether the 2% threshold in Guard 4 needs adjustment.
