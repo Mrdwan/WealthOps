@@ -2,9 +2,15 @@
 
 Public API:
     - ``compute_all_indicators``: assembly of all technical features.
+    - ``compute_composite``: momentum composite with signal classification.
     - Individual indicators for direct use.
 """
 
+from trading_advisor.indicators.composite import (
+    Signal,
+    classify_signal,
+    compute_composite,
+)
 from trading_advisor.indicators.technical import (
     compute_adx,
     compute_all_indicators,
@@ -20,6 +26,9 @@ from trading_advisor.indicators.technical import (
 )
 
 __all__ = [
+    "Signal",
+    "classify_signal",
+    "compute_composite",
     "compute_adx",
     "compute_all_indicators",
     "compute_atr",

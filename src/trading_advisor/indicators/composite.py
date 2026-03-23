@@ -176,3 +176,72 @@ def sr_proximity_component(
     high_nd = high.rolling(window=lookback).max()
     sr_raw = 1.0 - (high_nd - close) / close
     return rolling_zscore(sr_raw, window=window)
+
+
+def classify_signal(composite: float) -> Signal:
+    """Classify a composite score into a trading signal.
+
+    Thresholds (strict inequality):
+        - composite > 2.0  -> STRONG_BUY
+        - composite > 1.5  -> BUY
+        - composite < -2.0 -> STRONG_SELL
+        - composite < -1.5 -> SELL
+        - otherwise        -> NEUTRAL
+
+    Args:
+        composite: Composite z-score value.
+
+    Returns:
+        Signal classification.
+    """
+    if composite > 2.0:
+        return Signal.STRONG_BUY
+    if composite > 1.5:
+        return Signal.BUY
+    if composite < -2.0:
+        return Signal.STRONG_SELL
+    if composite < -1.5:
+        return Signal.SELL
+    return Signal.NEUTRAL
+
+
+def compute_composite(indicators: pd.DataFrame) -> pd.DataFrame:
+    """Compute momentum composite from a DataFrame of technical indicators.
+
+    Calls all 5 component functions, computes weighted sum, and classifies signals.
+
+    Required input columns: ``close``, ``high``, ``sma_50``, ``sma_200``,
+    ``rsi_14``, ``atr_14``.
+
+    Output adds columns: ``momentum_z``, ``trend_z``, ``rsi_filter_z``,
+    ``atr_volatility_z``, ``sr_proximity_z``, ``composite``, ``signal``.
+
+    Args:
+        indicators: DataFrame from ``compute_all_indicators`` (or compatible).
+
+    Returns:
+        Input DataFrame with composite columns added.
+    """
+    result = indicators.copy()
+
+    result["momentum_z"] = momentum_component(indicators["close"])
+    result["trend_z"] = trend_component(
+        indicators["close"], indicators["sma_50"], indicators["sma_200"]
+    )
+    result["rsi_filter_z"] = rsi_filter_component(indicators["rsi_14"])
+    result["atr_volatility_z"] = atr_volatility_component(indicators["atr_14"])
+    result["sr_proximity_z"] = sr_proximity_component(indicators["close"], indicators["high"])
+
+    result["composite"] = (
+        result["momentum_z"] * 0.44
+        + result["trend_z"] * 0.22
+        + result["rsi_filter_z"] * 0.17
+        + result["atr_volatility_z"] * 0.11
+        + result["sr_proximity_z"] * 0.06
+    )
+
+    result["signal"] = result["composite"].apply(
+        lambda x: classify_signal(x).value if pd.notna(x) else np.nan
+    )
+
+    return result

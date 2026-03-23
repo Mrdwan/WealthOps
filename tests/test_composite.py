@@ -7,6 +7,8 @@ import pytest
 from trading_advisor.indicators.composite import (
     Signal,
     atr_volatility_component,
+    classify_signal,
+    compute_composite,
     momentum_component,
     rolling_zscore,
     rsi_filter_component,
@@ -348,3 +350,130 @@ class TestSrProximityComponent:
         std_val = float(pd.Series(vals).std())
         expected_z = (0.98 - mean_val) / std_val
         assert result.iloc[26] == pytest.approx(expected_z, rel=1e-4)
+
+
+def _make_synthetic_df(n: int = 600) -> pd.DataFrame:
+    """Create a synthetic DataFrame with required indicator columns."""
+    rng = np.random.default_rng(0)
+    close = pd.Series(np.cumsum(rng.normal(0.0, 1.0, n)) + 300.0, dtype=np.float64)
+    high = close + rng.uniform(0.5, 2.0, n)
+    sma_50 = close.rolling(50).mean()
+    sma_200 = close.rolling(200).mean()
+    rsi_14 = pd.Series(50.0 + rng.normal(0.0, 10.0, n), dtype=np.float64).clip(0.0, 100.0)
+    atr_14 = pd.Series(rng.uniform(1.0, 5.0, n), dtype=np.float64)
+    return pd.DataFrame(
+        {
+            "close": close,
+            "high": high,
+            "sma_50": sma_50,
+            "sma_200": sma_200,
+            "rsi_14": rsi_14,
+            "atr_14": atr_14,
+        }
+    )
+
+
+class TestClassifySignal:
+    def test_strong_buy(self) -> None:
+        assert classify_signal(2.5) == Signal.STRONG_BUY
+
+    def test_buy(self) -> None:
+        assert classify_signal(1.8) == Signal.BUY
+
+    def test_neutral(self) -> None:
+        assert classify_signal(0.0) == Signal.NEUTRAL
+
+    def test_sell(self) -> None:
+        assert classify_signal(-1.8) == Signal.SELL
+
+    def test_strong_sell(self) -> None:
+        assert classify_signal(-2.5) == Signal.STRONG_SELL
+
+    def test_boundary_2_0_is_buy(self) -> None:
+        """Exactly 2.0 is BUY, not STRONG_BUY (strict >)."""
+        assert classify_signal(2.0) == Signal.BUY
+
+    def test_boundary_1_5_is_neutral(self) -> None:
+        """Exactly 1.5 is NEUTRAL, not BUY (strict >)."""
+        assert classify_signal(1.5) == Signal.NEUTRAL
+
+    def test_boundary_neg_1_5_is_neutral(self) -> None:
+        """Exactly -1.5 is NEUTRAL, not SELL (strict <)."""
+        assert classify_signal(-1.5) == Signal.NEUTRAL
+
+    def test_boundary_neg_2_0_is_sell(self) -> None:
+        """Exactly -2.0 is SELL, not STRONG_SELL (strict <)."""
+        assert classify_signal(-2.0) == Signal.SELL
+
+
+class TestComputeComposite:
+    def test_all_columns_present(self) -> None:
+        """Output has all 7 composite columns added."""
+        df = _make_synthetic_df(600)
+        result = compute_composite(df)
+        expected_cols = {
+            "momentum_z",
+            "trend_z",
+            "rsi_filter_z",
+            "atr_volatility_z",
+            "sr_proximity_z",
+            "composite",
+            "signal",
+        }
+        assert expected_cols.issubset(set(result.columns))
+
+    def test_input_columns_preserved(self) -> None:
+        """Original input columns are preserved in the output."""
+        df = _make_synthetic_df(600)
+        result = compute_composite(df)
+        for col in ("close", "high", "sma_50", "sma_200", "rsi_14", "atr_14"):
+            assert col in result.columns
+
+    def test_signal_column_matches_classify(self) -> None:
+        """Signal column values match classify_signal applied to composite."""
+        df = _make_synthetic_df(600)
+        result = compute_composite(df)
+        valid_rows = result.dropna(subset=["composite"])
+        assert len(valid_rows) > 0, "No valid composite rows — increase synthetic data size"
+        for _, row in valid_rows.iterrows():
+            expected = classify_signal(float(row["composite"])).value
+            assert row["signal"] == expected
+
+    def test_weights_sum_to_1(self) -> None:
+        """Weights (0.44 + 0.22 + 0.17 + 0.11 + 0.06) = 1.0."""
+        assert pytest.approx(1.0) == 0.44 + 0.22 + 0.17 + 0.11 + 0.06
+
+    def test_weighted_sum_formula(self) -> None:
+        """composite = weighted sum of component z-scores."""
+        df = _make_synthetic_df(600)
+        result = compute_composite(df)
+        # Recompute composite manually from component columns and verify
+        manual_composite = (
+            result["momentum_z"] * 0.44
+            + result["trend_z"] * 0.22
+            + result["rsi_filter_z"] * 0.17
+            + result["atr_volatility_z"] * 0.11
+            + result["sr_proximity_z"] * 0.06
+        )
+        valid_mask = result["composite"].notna()
+        assert valid_mask.sum() > 0, "No valid composite rows — increase synthetic data size"
+        pd.testing.assert_series_equal(
+            result.loc[valid_mask, "composite"],
+            manual_composite[valid_mask],
+            check_names=False,
+        )
+
+    def test_signal_nan_for_nan_composite(self) -> None:
+        """Rows with NaN composite have NaN signal."""
+        df = _make_synthetic_df(600)
+        result = compute_composite(df)
+        nan_composite_mask = result["composite"].isna()
+        assert nan_composite_mask.sum() > 0, "Expected some NaN rows"
+        assert result.loc[nan_composite_mask, "signal"].isna().all()
+
+    def test_does_not_mutate_input(self) -> None:
+        """Input DataFrame is not mutated."""
+        df = _make_synthetic_df(600)
+        original_cols = list(df.columns)
+        compute_composite(df)
+        assert list(df.columns) == original_cols
