@@ -6,6 +6,7 @@ import pytest
 
 from trading_advisor.indicators.technical import (
     compute_adx,
+    compute_all_indicators,
     compute_atr,
     compute_distance_from_20d_low,
     compute_ema,
@@ -614,3 +615,108 @@ class TestComputeRelativeStrengthVsUsd:
         eurusd_close = pd.Series([1.0, 1.0, 1.0], dtype=np.float64)
         with pytest.raises(ValueError, match="window must be >= 1"):
             compute_relative_strength_vs_usd(xau_close, eurusd_close, window=0)
+
+
+class TestComputeAllIndicators:
+    """Tests for compute_all_indicators (assembly function)."""
+
+    @pytest.fixture()
+    def synthetic_data(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Generate 300 rows of synthetic OHLCV + EUR/USD data."""
+        np.random.seed(42)
+        n = 300
+        dates = pd.bdate_range("2020-01-01", periods=n)
+        # Random walk for close prices starting at 2000
+        close = 2000.0 + np.cumsum(np.random.randn(n) * 10)
+        high = close + np.abs(np.random.randn(n) * 5) + 1
+        low = close - np.abs(np.random.randn(n) * 5) - 1
+        open_ = close + np.random.randn(n) * 3
+
+        # Ensure OHLCV validity: high >= max(open, close), low <= min(open, close)
+        high = np.maximum(high, np.maximum(open_, close))
+        low = np.minimum(low, np.minimum(open_, close))
+
+        ohlcv = pd.DataFrame(
+            {"open": open_, "high": high, "low": low, "close": close},
+            index=dates,
+        )
+
+        eurusd = pd.DataFrame(
+            {"close": 1.10 + np.random.randn(n) * 0.01},
+            index=dates,
+        )
+        return ohlcv, eurusd
+
+    def test_all_columns_present(self, synthetic_data: tuple[pd.DataFrame, pd.DataFrame]) -> None:
+        """All 16 indicator columns should be present."""
+        ohlcv, eurusd = synthetic_data
+        result = compute_all_indicators(ohlcv, eurusd)
+        expected_cols = {
+            "rsi_14",
+            "ema_8",
+            "ema_20",
+            "ema_50",
+            "ema_fan",
+            "sma_50",
+            "sma_200",
+            "macd_histogram",
+            "plus_di",
+            "minus_di",
+            "adx_14",
+            "atr_14",
+            "upper_wick_ratio",
+            "lower_wick_ratio",
+            "distance_from_20d_low",
+            "relative_strength_usd",
+        }
+        assert expected_cols.issubset(set(result.columns))
+
+    def test_no_nan_after_warmup(self, synthetic_data: tuple[pd.DataFrame, pd.DataFrame]) -> None:
+        """After row 199 (SMA_200 warmup), no NaN in numeric columns."""
+        ohlcv, eurusd = synthetic_data
+        result = compute_all_indicators(ohlcv, eurusd)
+        # SMA_200 has the longest warmup (199 NaN rows). After row 199, all indicators valid.
+        after_warmup = result.iloc[199:]
+        numeric_cols = after_warmup.select_dtypes(include=[np.number]).columns
+        nan_counts = after_warmup[numeric_cols].isna().sum()
+        assert (nan_counts == 0).all(), f"NaN found after warmup: {nan_counts[nan_counts > 0]}"
+
+    def test_ema_fan_is_bool(self, synthetic_data: tuple[pd.DataFrame, pd.DataFrame]) -> None:
+        """EMA fan column should be boolean dtype."""
+        ohlcv, eurusd = synthetic_data
+        result = compute_all_indicators(ohlcv, eurusd)
+        assert result["ema_fan"].dtype == bool
+
+    def test_original_columns_preserved(
+        self, synthetic_data: tuple[pd.DataFrame, pd.DataFrame]
+    ) -> None:
+        """Original OHLCV columns should be preserved unchanged."""
+        ohlcv, eurusd = synthetic_data
+        result = compute_all_indicators(ohlcv, eurusd)
+        pd.testing.assert_series_equal(result["close"], ohlcv["close"])
+        pd.testing.assert_series_equal(result["open"], ohlcv["open"])
+
+    def test_indicator_values_match_direct_calls(
+        self, synthetic_data: tuple[pd.DataFrame, pd.DataFrame]
+    ) -> None:
+        """Assembly output must match direct indicator calls."""
+        ohlcv, eurusd = synthetic_data
+        result = compute_all_indicators(ohlcv, eurusd)
+        # Spot-check a few indicators to catch parameter wiring bugs
+        pd.testing.assert_series_equal(
+            result["rsi_14"], compute_rsi(ohlcv["close"]), check_names=False
+        )
+        pd.testing.assert_series_equal(
+            result["ema_8"], compute_ema(ohlcv["close"], span=8), check_names=False
+        )
+        pd.testing.assert_series_equal(
+            result["ema_20"], compute_ema(ohlcv["close"], span=20), check_names=False
+        )
+        pd.testing.assert_series_equal(
+            result["sma_50"], compute_sma(ohlcv["close"], window=50), check_names=False
+        )
+        pd.testing.assert_series_equal(
+            result["atr_14"],
+            compute_atr(ohlcv["high"], ohlcv["low"], ohlcv["close"]),
+            check_names=False,
+        )

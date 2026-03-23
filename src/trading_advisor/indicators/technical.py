@@ -388,3 +388,71 @@ def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> p
         Boolean Series: True when EMA_8 > EMA_20 > EMA_50.
     """
     return (ema_8 > ema_20) & (ema_20 > ema_50)
+
+
+def compute_all_indicators(
+    ohlcv: pd.DataFrame,
+    eurusd: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compute all technical indicators from OHLCV and EUR/USD data.
+
+    Calls each indicator function and assembles results into a single
+    DataFrame with the original OHLCV columns plus all indicator columns.
+
+    Args:
+        ohlcv: DataFrame with ``open``, ``high``, ``low``, ``close`` columns
+            and a DatetimeIndex.
+        eurusd: DataFrame with a ``close`` column for EUR/USD exchange rate
+            and a DatetimeIndex. Aligned to ohlcv's index.
+
+    Returns:
+        DataFrame with original OHLCV columns plus:
+        ``rsi_14``, ``ema_8``, ``ema_20``, ``ema_50``, ``ema_fan``,
+        ``sma_50``, ``sma_200``, ``macd_histogram``, ``plus_di``,
+        ``minus_di``, ``adx_14``, ``atr_14``, ``upper_wick_ratio``,
+        ``lower_wick_ratio``, ``distance_from_20d_low``,
+        ``relative_strength_usd``.
+    """
+    result = ohlcv.copy()
+
+    # RSI
+    result["rsi_14"] = compute_rsi(ohlcv["close"])
+
+    # EMAs
+    result["ema_8"] = compute_ema(ohlcv["close"], span=8)
+    result["ema_20"] = compute_ema(ohlcv["close"], span=20)
+    result["ema_50"] = compute_ema(ohlcv["close"], span=50)
+
+    # EMA Fan
+    result["ema_fan"] = compute_ema_fan(result["ema_8"], result["ema_20"], result["ema_50"])
+
+    # SMAs
+    result["sma_50"] = compute_sma(ohlcv["close"], window=50)
+    result["sma_200"] = compute_sma(ohlcv["close"], window=200)
+
+    # MACD
+    result["macd_histogram"] = compute_macd_histogram(ohlcv["close"])
+
+    # ADX
+    adx_df = compute_adx(ohlcv["high"], ohlcv["low"], ohlcv["close"])
+    result["plus_di"] = adx_df["plus_di"]
+    result["minus_di"] = adx_df["minus_di"]
+    result["adx_14"] = adx_df["adx"]
+
+    # ATR
+    result["atr_14"] = compute_atr(ohlcv["high"], ohlcv["low"], ohlcv["close"])
+
+    # Wick ratios
+    wick_df = compute_wick_ratios(ohlcv)
+    result["upper_wick_ratio"] = wick_df["upper_wick_ratio"]
+    result["lower_wick_ratio"] = wick_df["lower_wick_ratio"]
+
+    # Distance from 20d low
+    result["distance_from_20d_low"] = compute_distance_from_20d_low(ohlcv["close"], ohlcv["low"])
+
+    # Relative strength vs USD
+    result["relative_strength_usd"] = compute_relative_strength_vs_usd(
+        ohlcv["close"], eurusd["close"]
+    )
+
+    return result
