@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from trading_advisor.indicators.technical import (
+    compute_adx,
     compute_ema,
     compute_ema_fan,
     compute_macd_histogram,
@@ -235,3 +236,121 @@ class TestComputeMacdHistogram:
             compute_macd_histogram(close, fast=0, slow=3, signal=2)
         with pytest.raises(ValueError):
             compute_macd_histogram(close, fast=1, slow=3, signal=0)
+
+
+class TestComputeAdx:
+    """Tests for compute_adx (Average Directional Index)."""
+
+    def test_known_values_period_2(self) -> None:
+        """Verify ADX values match hand-computed Wilder's smoothing for period=2."""
+        high = pd.Series([12.0, 14.0, 16.0, 15.0, 17.0], dtype=np.float64)
+        low = pd.Series([8.0, 9.0, 11.0, 10.0, 12.0], dtype=np.float64)
+        close = pd.Series([10.0, 13.0, 15.0, 12.0, 16.0], dtype=np.float64)
+        result = compute_adx(high, low, close, period=2)
+
+        # +DI: [NaN, NaN, 40.0, 20.0, 30.0]
+        assert pd.isna(result["plus_di"].iloc[0])
+        assert pd.isna(result["plus_di"].iloc[1])
+        assert result["plus_di"].iloc[2] == pytest.approx(40.0, abs=1e-4)
+        assert result["plus_di"].iloc[3] == pytest.approx(20.0, abs=1e-4)
+        assert result["plus_di"].iloc[4] == pytest.approx(30.0, abs=1e-4)
+
+        # -DI: [NaN, NaN, 0.0, 10.0, 5.0]
+        # (Spec table had arithmetic error: 0*0.5+1=1.0, not 0.5)
+        assert pd.isna(result["minus_di"].iloc[0])
+        assert pd.isna(result["minus_di"].iloc[1])
+        assert result["minus_di"].iloc[2] == pytest.approx(0.0, abs=1e-4)
+        assert result["minus_di"].iloc[3] == pytest.approx(10.0, abs=1e-4)
+        assert result["minus_di"].iloc[4] == pytest.approx(5.0, abs=1e-4)
+
+        # ADX: [NaN, NaN, NaN, 200/3, 1450/21]
+        # DX[2]=100, DX[3]=100/3; ADX[3]=mean(100, 100/3)=200/3
+        # DX[4]=500/7; ADX[4]=(200/3*1 + 500/7)/2 = 1450/21*1/2... wait
+        # ADX[4] = (ADX[3]*(2-1) + DX[4]) / 2 = (200/3 + 500/7)/2 = 2900/42 = 1450/21
+        assert pd.isna(result["adx"].iloc[0])
+        assert pd.isna(result["adx"].iloc[1])
+        assert pd.isna(result["adx"].iloc[2])
+        assert result["adx"].iloc[3] == pytest.approx(200.0 / 3.0, abs=1e-4)
+        assert result["adx"].iloc[4] == pytest.approx(1450.0 / 21.0, abs=1e-4)
+
+    def test_flat_market_no_crash(self) -> None:
+        """Flat market (TR=0) should produce DI=0, ADX=0, not crash."""
+        high = pd.Series([10.0] * 8, dtype=np.float64)
+        low = pd.Series([10.0] * 8, dtype=np.float64)
+        close = pd.Series([10.0] * 8, dtype=np.float64)
+        result = compute_adx(high, low, close, period=3)
+        # After warmup, DI values should be exactly 0.0
+        for i in range(3, 8):
+            assert result["plus_di"].iloc[i] == 0.0
+            assert result["minus_di"].iloc[i] == 0.0
+        # ADX after warmup should be 0.0
+        for i in range(5, 8):
+            assert result["adx"].iloc[i] == 0.0
+
+    def test_downtrend_minus_di_dominates(self) -> None:
+        """In a downtrend, -DI should exceed +DI."""
+        # Steadily declining highs and lows
+        high = pd.Series([20.0, 19.0, 18.0, 17.0, 16.0, 15.0], dtype=np.float64)
+        low = pd.Series([18.0, 17.0, 16.0, 15.0, 14.0, 13.0], dtype=np.float64)
+        close = pd.Series([19.0, 18.0, 17.0, 16.0, 15.0, 14.0], dtype=np.float64)
+        result = compute_adx(high, low, close, period=2)
+        # After warmup (index >= 2), -DI should be > +DI
+        for i in range(2, 6):
+            assert result["minus_di"].iloc[i] > result["plus_di"].iloc[i]
+        # ADX should be high (strong trend)
+        assert result["adx"].iloc[-1] > 50.0
+
+    def test_strong_uptrend(self) -> None:
+        """Steadily increasing prices: +DI > -DI, ADX > 25 eventually."""
+        n = 30
+        high = pd.Series([10.0 + i * 2.0 for i in range(n)], dtype=np.float64)
+        low = pd.Series([8.0 + i * 2.0 for i in range(n)], dtype=np.float64)
+        close = pd.Series([9.0 + i * 2.0 for i in range(n)], dtype=np.float64)
+        result = compute_adx(high, low, close, period=3)
+
+        # After warmup, +DI should dominate -DI
+        valid_mask = ~pd.isna(result["plus_di"])
+        assert (result["plus_di"][valid_mask] > result["minus_di"][valid_mask]).all()
+
+        # ADX should be > 25 at the end (strong trend)
+        assert result["adx"].iloc[-1] > 25.0
+
+    def test_warmup_nan_default_period(self) -> None:
+        """Default period=14: first 13 DI NaN, first 27 ADX NaN."""
+        n = 50
+        high = pd.Series([100.0 + float(i) for i in range(n)], dtype=np.float64)
+        low = pd.Series([98.0 + float(i) for i in range(n)], dtype=np.float64)
+        close = pd.Series([99.0 + float(i) for i in range(n)], dtype=np.float64)
+        result = compute_adx(high, low, close)
+
+        # First 14 values (indices 0-13) of +DI/-DI are NaN
+        for i in range(14):
+            assert pd.isna(result["plus_di"].iloc[i]), f"+DI NaN at {i}"
+            assert pd.isna(result["minus_di"].iloc[i]), f"-DI NaN at {i}"
+        assert not pd.isna(result["plus_di"].iloc[14])
+
+        # First 27 values (indices 0-26) of ADX are NaN (2*14 - 1 = 27)
+        for i in range(27):
+            assert pd.isna(result["adx"].iloc[i]), f"ADX NaN at {i}"
+        assert not pd.isna(result["adx"].iloc[27])
+
+    def test_invalid_period_raises(self) -> None:
+        """period=1 or period=0 must raise ValueError."""
+        high = pd.Series([1.0, 2.0, 3.0], dtype=np.float64)
+        low = pd.Series([0.5, 1.5, 2.5], dtype=np.float64)
+        close = pd.Series([0.8, 1.8, 2.8], dtype=np.float64)
+        with pytest.raises(ValueError, match="period must be >= 2"):
+            compute_adx(high, low, close, period=1)
+        with pytest.raises(ValueError, match="period must be >= 2"):
+            compute_adx(high, low, close, period=0)
+
+    def test_returns_dataframe_columns(self) -> None:
+        """Return value is a DataFrame with columns plus_di, minus_di, adx."""
+        high = pd.Series([12.0, 14.0, 16.0, 15.0, 17.0], dtype=np.float64)
+        low = pd.Series([8.0, 9.0, 11.0, 10.0, 12.0], dtype=np.float64)
+        close = pd.Series([10.0, 13.0, 15.0, 12.0, 16.0], dtype=np.float64)
+        result = compute_adx(high, low, close, period=2)
+
+        assert isinstance(result, pd.DataFrame)
+        assert list(result.columns) == ["plus_di", "minus_di", "adx"]
+        assert len(result) == len(high)
