@@ -233,6 +233,61 @@ def compute_adx(
     )
 
 
+def compute_atr(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = 14,
+) -> pd.Series:
+    """Compute Average True Range using Wilder's smoothing.
+
+    True Range = max(high-low, |high-prev_close|, |low-prev_close|).
+    First ATR = mean of first ``period`` true ranges.
+    Subsequent: Wilder's smoothing.
+
+    Args:
+        high: Series of high prices.
+        low: Series of low prices.
+        close: Series of closing prices.
+        period: ATR period (default 14).
+
+    Returns:
+        ATR series. First ``period`` values are NaN.
+
+    Raises:
+        ValueError: If period is less than 1.
+    """
+    if period < 1:
+        raise ValueError(f"period must be >= 1, got {period}")
+
+    n = len(high)
+    tr = np.full(n, np.nan, dtype=np.float64)
+
+    # Compute True Range for indices 1 onward (index 0 needs prev close)
+    for i in range(1, n):
+        tr[i] = max(
+            float(high.iloc[i]) - float(low.iloc[i]),
+            abs(float(high.iloc[i]) - float(close.iloc[i - 1])),
+            abs(float(low.iloc[i]) - float(close.iloc[i - 1])),
+        )
+
+    result = pd.Series(np.nan, index=high.index, dtype=np.float64)
+
+    # First ATR at index `period`: mean of TR[1] through TR[period]
+    if period < n:
+        first_atr: np.float64 = np.float64(np.mean(tr[1 : period + 1]))
+        result.iloc[period] = first_atr
+
+        # Wilder's smoothing for subsequent values
+        prev_atr = first_atr
+        for i in range(period + 1, n):
+            current_tr = np.float64(tr[i])
+            prev_atr = (prev_atr * np.float64(period - 1) + current_tr) / np.float64(period)
+            result.iloc[i] = prev_atr
+
+    return result
+
+
 def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> pd.Series:
     """Check if EMAs are in bullish fan alignment.
 

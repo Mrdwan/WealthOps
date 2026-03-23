@@ -6,6 +6,7 @@ import pytest
 
 from trading_advisor.indicators.technical import (
     compute_adx,
+    compute_atr,
     compute_ema,
     compute_ema_fan,
     compute_macd_histogram,
@@ -354,3 +355,74 @@ class TestComputeAdx:
         assert isinstance(result, pd.DataFrame)
         assert list(result.columns) == ["plus_di", "minus_di", "adx"]
         assert len(result) == len(high)
+
+
+class TestComputeAtr:
+    """Tests for compute_atr (Average True Range, Wilder's smoothing)."""
+
+    def test_known_values_period_3(self) -> None:
+        """Verify ATR against hand-calculated values for period=3."""
+        high = pd.Series([12.0, 14.0, 15.0, 13.0, 16.0, 17.0, 15.0], dtype=np.float64)
+        low = pd.Series([8.0, 9.0, 10.0, 11.0, 10.0, 12.0, 11.0], dtype=np.float64)
+        close = pd.Series([10.0, 13.0, 14.0, 12.0, 15.0, 16.0, 13.0], dtype=np.float64)
+        result = compute_atr(high, low, close, period=3)
+
+        # First 3 values (indices 0-2) must be NaN
+        assert pd.isna(result.iloc[0])
+        assert pd.isna(result.iloc[1])
+        assert pd.isna(result.iloc[2])
+
+        # ATR[3] = mean(5, 5, 3) = 13/3
+        assert result.iloc[3] == pytest.approx(13.0 / 3.0, abs=1e-4)
+        # ATR[4] = (13/3 * 2 + 6) / 3 = 44/9
+        assert result.iloc[4] == pytest.approx(44.0 / 9.0, abs=1e-4)
+        # ATR[5] = (44/9 * 2 + 5) / 3 = 133/27
+        assert result.iloc[5] == pytest.approx(133.0 / 27.0, abs=1e-4)
+        # ATR[6] = (133/27 * 2 + 5) / 3 = 401/81
+        assert result.iloc[6] == pytest.approx(401.0 / 81.0, abs=1e-4)
+
+    def test_flat_market_atr_zero(self) -> None:
+        """When high == low == close for all bars, ATR = 0."""
+        high = pd.Series([100.0] * 6, dtype=np.float64)
+        low = pd.Series([100.0] * 6, dtype=np.float64)
+        close = pd.Series([100.0] * 6, dtype=np.float64)
+        result = compute_atr(high, low, close, period=3)
+        for i in range(3, 6):
+            assert result.iloc[i] == pytest.approx(0.0)
+
+    def test_warmup_nan(self) -> None:
+        """First period values should be NaN, index period should be a valid float."""
+        n = 30
+        high = pd.Series([10.0 + float(i) * 2.0 for i in range(n)], dtype=np.float64)
+        low = pd.Series([8.0 + float(i) * 2.0 for i in range(n)], dtype=np.float64)
+        close = pd.Series([9.0 + float(i) * 2.0 for i in range(n)], dtype=np.float64)
+        result = compute_atr(high, low, close, period=14)
+
+        for i in range(14):
+            assert pd.isna(result.iloc[i]), f"Expected NaN at index {i}"
+        assert not pd.isna(result.iloc[14])
+        assert isinstance(result.iloc[14], float)
+
+    def test_invalid_period_raises(self) -> None:
+        """period < 1 raises ValueError."""
+        close = pd.Series([1.0, 2.0], dtype=np.float64)
+        with pytest.raises(ValueError, match="period must be >= 1"):
+            compute_atr(close, close, close, period=0)
+
+    def test_volatile_higher_than_flat(self) -> None:
+        """Volatile data should have higher ATR than stable (flat-range) data."""
+        n = 20
+        # Volatile: wide range between high and low
+        v_high = pd.Series([100.0 + 10.0 * (i % 2) for i in range(n)], dtype=np.float64)
+        v_low = pd.Series([100.0 - 10.0 * (i % 2) for i in range(n)], dtype=np.float64)
+        v_close = pd.Series([100.0] * n, dtype=np.float64)
+        # Flat: tight range
+        f_high = pd.Series([100.1] * n, dtype=np.float64)
+        f_low = pd.Series([99.9] * n, dtype=np.float64)
+        f_close = pd.Series([100.0] * n, dtype=np.float64)
+
+        period = 5
+        atr_volatile = compute_atr(v_high, v_low, v_close, period=period)
+        atr_flat = compute_atr(f_high, f_low, f_close, period=period)
+
+        assert atr_volatile.iloc[-1] > atr_flat.iloc[-1]
