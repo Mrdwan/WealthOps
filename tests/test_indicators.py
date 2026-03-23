@@ -11,6 +11,7 @@ from trading_advisor.indicators.technical import (
     compute_ema,
     compute_ema_fan,
     compute_macd_histogram,
+    compute_relative_strength_vs_usd,
     compute_rsi,
     compute_sma,
     compute_wick_ratios,
@@ -549,3 +550,67 @@ class TestComputeDistanceFrom20dLow:
         low = pd.Series([99.0, 100.0, 101.0], dtype=np.float64)
         with pytest.raises(ValueError):
             compute_distance_from_20d_low(close, low, window=0)
+
+
+class TestComputeRelativeStrengthVsUsd:
+    """Tests for compute_relative_strength_vs_usd (rolling z-score of XAU/EUR ratio)."""
+
+    def test_known_values_window_3(self) -> None:
+        """Verify z-score values match pre-computed results for window=3, EUR/USD=1.0."""
+        xau_close = pd.Series([10.0, 12.0, 14.0, 10.0, 12.0], dtype=np.float64)
+        eurusd_close = pd.Series([1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float64)
+        result = compute_relative_strength_vs_usd(xau_close, eurusd_close, window=3)
+
+        # First 2 (window-1) values must be NaN
+        assert pd.isna(result.iloc[0])
+        assert pd.isna(result.iloc[1])
+
+        # i=2: ratio=[10,12,14], mean=12, std=2, z=(14-12)/2 = 1.0
+        assert result.iloc[2] == pytest.approx(1.0, abs=1e-5)
+        # i=3: ratio=[12,14,10], mean=12, std=2, z=(10-12)/2 = -1.0
+        assert result.iloc[3] == pytest.approx(-1.0, abs=1e-5)
+        # i=4: ratio=[14,10,12], mean=12, std=2, z=(12-12)/2 = 0.0
+        assert result.iloc[4] == pytest.approx(0.0, abs=1e-5)
+
+    def test_varying_eurusd(self) -> None:
+        """Verify z-score with varying EUR/USD values (window=3)."""
+        xau_close = pd.Series([10.0, 12.0, 14.0], dtype=np.float64)
+        eurusd_close = pd.Series([1.0, 2.0, 1.0], dtype=np.float64)
+        result = compute_relative_strength_vs_usd(xau_close, eurusd_close, window=3)
+
+        # Ratio = [10.0, 6.0, 14.0]
+        # Mean = 10.0, Std = sqrt((0+16+16)/2) = 4.0
+        # Z at index 2 = (14 - 10) / 4 = 1.0
+        assert pd.isna(result.iloc[0])
+        assert pd.isna(result.iloc[1])
+        assert result.iloc[2] == pytest.approx(1.0, abs=1e-5)
+
+    def test_constant_ratio_nan(self) -> None:
+        """Constant ratio → std = 0 → z-score is NaN (IEEE float division)."""
+        xau_close = pd.Series([100.0, 100.0, 100.0], dtype=np.float64)
+        eurusd_close = pd.Series([1.0, 1.0, 1.0], dtype=np.float64)
+        result = compute_relative_strength_vs_usd(xau_close, eurusd_close, window=3)
+
+        # All warmup NaN
+        assert pd.isna(result.iloc[0])
+        assert pd.isna(result.iloc[1])
+        # std = 0 → NaN (not a crash)
+        assert pd.isna(result.iloc[2])
+
+    def test_warmup_nan(self) -> None:
+        """First window-1 values must be NaN; index window-1 must be non-NaN."""
+        n = 25
+        xau_close = pd.Series([1900.0 + float(i) for i in range(n)], dtype=np.float64)
+        eurusd_close = pd.Series([1.1] * n, dtype=np.float64)
+        result = compute_relative_strength_vs_usd(xau_close, eurusd_close, window=20)
+
+        for i in range(19):
+            assert pd.isna(result.iloc[i]), f"Expected NaN at index {i}"
+        assert not pd.isna(result.iloc[19])
+
+    def test_invalid_window_raises(self) -> None:
+        """window < 1 must raise ValueError."""
+        xau_close = pd.Series([100.0, 101.0, 102.0], dtype=np.float64)
+        eurusd_close = pd.Series([1.0, 1.0, 1.0], dtype=np.float64)
+        with pytest.raises(ValueError, match="window must be >= 1"):
+            compute_relative_strength_vs_usd(xau_close, eurusd_close, window=0)

@@ -343,6 +343,37 @@ def compute_distance_from_20d_low(
     return (close - rolling_low) / close
 
 
+def compute_relative_strength_vs_usd(
+    xau_close: pd.Series,
+    eurusd_close: pd.Series,
+    window: int = 20,
+) -> pd.Series:
+    """Compute rolling z-score of XAU/EUR ratio.
+
+    Measures gold's relative strength against the US dollar using
+    the EUR/USD exchange rate as a proxy.
+
+    Formula: z-score of ``xau_close / eurusd_close`` over rolling window.
+
+    Args:
+        xau_close: Gold closing prices.
+        eurusd_close: EUR/USD exchange rate.
+        window: Rolling z-score window (default 20).
+
+    Returns:
+        Z-score series. First ``window - 1`` values are NaN.
+
+    Raises:
+        ValueError: If window is less than 1.
+    """
+    if window < 1:
+        raise ValueError(f"window must be >= 1, got {window}")
+    ratio = xau_close / eurusd_close
+    rolling_mean = ratio.rolling(window=window).mean()
+    rolling_std = ratio.rolling(window=window).std()
+    return (ratio - rolling_mean) / rolling_std
+
+
 def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> pd.Series:
     """Check if EMAs are in bullish fan alignment.
 
