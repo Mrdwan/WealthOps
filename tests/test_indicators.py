@@ -12,6 +12,7 @@ from trading_advisor.indicators.technical import (
     compute_ema,
     compute_ema_fan,
     compute_macd_histogram,
+    compute_pullback_distance,
     compute_relative_strength_vs_usd,
     compute_rsi,
     compute_sma,
@@ -720,3 +721,33 @@ class TestComputeAllIndicators:
             compute_atr(ohlcv["high"], ohlcv["low"], ohlcv["close"]),
             check_names=False,
         )
+
+
+class TestComputePullbackDistance:
+    def test_known_values(self) -> None:
+        """Verify pullback distance against pre-computed values."""
+        close = pd.Series([100.0, 105.0, 95.0, 100.0], dtype=np.float64)
+        ema_8 = pd.Series([100.0, 100.0, 100.0, 100.0], dtype=np.float64)
+        result = compute_pullback_distance(close, ema_8)
+        assert result.iloc[0] == pytest.approx(0.0)
+        assert result.iloc[1] == pytest.approx(0.05)
+        assert result.iloc[2] == pytest.approx(-0.05)
+        assert result.iloc[3] == pytest.approx(0.0)
+
+    def test_above_ema_positive(self) -> None:
+        """Close above EMA → positive distance."""
+        close = pd.Series([110.0], dtype=np.float64)
+        ema_8 = pd.Series([100.0], dtype=np.float64)
+        assert compute_pullback_distance(close, ema_8).iloc[0] > 0
+
+    def test_below_ema_negative(self) -> None:
+        """Close below EMA → negative distance."""
+        close = pd.Series([90.0], dtype=np.float64)
+        ema_8 = pd.Series([100.0], dtype=np.float64)
+        assert compute_pullback_distance(close, ema_8).iloc[0] < 0
+
+    def test_equal_returns_zero(self) -> None:
+        """Close == EMA → zero distance."""
+        close = pd.Series([100.0], dtype=np.float64)
+        ema_8 = pd.Series([100.0], dtype=np.float64)
+        assert compute_pullback_distance(close, ema_8).iloc[0] == pytest.approx(0.0)

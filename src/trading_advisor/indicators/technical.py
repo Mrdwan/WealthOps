@@ -390,6 +390,23 @@ def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> p
     return (ema_8 > ema_20) & (ema_20 > ema_50)
 
 
+def compute_pullback_distance(close: pd.Series, ema_8: pd.Series) -> pd.Series:
+    """Compute pullback distance from EMA(8) as a fraction.
+
+    Formula: ``(close - ema_8) / ema_8``.
+    Used by the Pullback Zone guard to determine proximity to EMA.
+
+    Args:
+        close: Closing price series.
+        ema_8: 8-period EMA series.
+
+    Returns:
+        Pullback distance series. Positive when close > EMA_8,
+        negative when below, zero when equal.
+    """
+    return (close - ema_8) / ema_8
+
+
 def compute_all_indicators(
     ohlcv: pd.DataFrame,
     eurusd: pd.DataFrame,
