@@ -87,6 +87,46 @@ def compute_sma(series: pd.Series, window: int) -> pd.Series:
     return series.rolling(window=window).mean()
 
 
+def compute_macd_histogram(
+    close: pd.Series,
+    fast: int = 12,
+    slow: int = 26,
+    signal: int = 9,
+) -> pd.Series:
+    """Compute MACD histogram (MACD line minus signal line).
+
+    MACD line = EMA(fast) - EMA(slow).
+    Signal line = EMA(signal) of MACD line.
+    Histogram = MACD line - Signal line.
+
+    Args:
+        close: Series of closing prices.
+        fast: Fast EMA period (default 12).
+        slow: Slow EMA period (default 26).
+        signal: Signal line EMA period (default 9).
+
+    Returns:
+        MACD histogram series. No NaN values (EMA starts from first value).
+
+    Raises:
+        ValueError: If fast, slow, or signal is less than 1, or if fast >= slow.
+    """
+    if fast < 1:
+        raise ValueError(f"fast must be >= 1, got {fast}")
+    if slow < 1:
+        raise ValueError(f"slow must be >= 1, got {slow}")
+    if signal < 1:
+        raise ValueError(f"signal must be >= 1, got {signal}")
+    if fast >= slow:
+        raise ValueError(f"fast must be < slow, got fast={fast}, slow={slow}")
+
+    ema_fast = compute_ema(close, span=fast)
+    ema_slow = compute_ema(close, span=slow)
+    macd_line = ema_fast - ema_slow
+    signal_line = compute_ema(macd_line, span=signal)
+    return macd_line - signal_line
+
+
 def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> pd.Series:
     """Check if EMAs are in bullish fan alignment.
 

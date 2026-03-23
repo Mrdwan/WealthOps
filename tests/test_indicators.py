@@ -7,6 +7,7 @@ import pytest
 from trading_advisor.indicators.technical import (
     compute_ema,
     compute_ema_fan,
+    compute_macd_histogram,
     compute_rsi,
     compute_sma,
 )
@@ -186,3 +187,51 @@ class TestComputeEmaFan:
         # Index 1: ema_20 == ema_50 → False (not strictly greater)
         expected = pd.Series([False, False])
         pd.testing.assert_series_equal(result, expected)
+
+
+class TestComputeMacdHistogram:
+    """Tests for compute_macd_histogram."""
+
+    def test_known_values(self) -> None:
+        """Verify MACD histogram values match hand-computed results for fast=2, slow=3, signal=2."""
+        close = pd.Series([10.0, 12.0, 11.0, 13.0, 14.0], dtype=np.float64)
+        result = compute_macd_histogram(close, fast=2, slow=3, signal=2)
+
+        # Histogram = MACD - Signal, pre-computed exact fractions:
+        # [0.0, 1/9, -1/27, 2/27, 13/243]
+        expected = [0.0, 1 / 9, -1 / 27, 2 / 27, 13 / 243]
+        for i, exp in enumerate(expected):
+            assert result.iloc[i] == pytest.approx(
+                exp, abs=1e-4
+            ), f"Mismatch at index {i}: got {result.iloc[i]}, expected {exp}"
+
+    def test_constant_prices_zero(self) -> None:
+        """All EMAs equal constant price → MACD = 0, Signal = 0, Histogram = 0."""
+        close = pd.Series([100.0] * 20, dtype=np.float64)
+        result = compute_macd_histogram(close)
+
+        for i in range(len(result)):
+            assert result.iloc[i] == pytest.approx(
+                0.0
+            ), f"Expected 0.0 at index {i}, got {result.iloc[i]}"
+
+    def test_uptrend_positive(self) -> None:
+        """In a sustained uptrend the histogram should be positive at the last bar."""
+        close = pd.Series([100.0 + i for i in range(30)], dtype=np.float64)
+        result = compute_macd_histogram(close)
+
+        assert result.iloc[-1] > 0
+
+    def test_fast_gte_slow_raises(self) -> None:
+        """fast >= slow must raise ValueError."""
+        close = pd.Series([1.0, 2.0, 3.0], dtype=np.float64)
+        with pytest.raises(ValueError, match="fast.*slow"):
+            compute_macd_histogram(close, fast=5, slow=3)
+
+    def test_invalid_period_raises(self) -> None:
+        """fast=0 or signal=0 must raise ValueError."""
+        close = pd.Series([1.0, 2.0, 3.0], dtype=np.float64)
+        with pytest.raises(ValueError):
+            compute_macd_histogram(close, fast=0, slow=3, signal=2)
+        with pytest.raises(ValueError):
+            compute_macd_histogram(close, fast=1, slow=3, signal=0)
