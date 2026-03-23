@@ -28,7 +28,8 @@
       "Bash(uv:*)",
       "Bash(wc:*)",
       "Bash(git stash:*)",
-      "Bash(git switch:*)"
+      "Bash(git switch:*)",
+      "Bash(md5:*)"
     ]
   },
   "hooks": {
