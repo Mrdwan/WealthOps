@@ -2,10 +2,6 @@
 
 You are debugging an issue. Follow this systematic process. Do NOT jump to solutions.
 
-## Phase 0: Branch Check
-
-Before starting, verify you're not on main (`git branch --show-current`). If on main, tell the user to create a feature branch first. Do not proceed until on a feature branch.
-
 ## Phase 1: Reproduce
 
 Before anything else, reproduce the bug reliably.
@@ -31,6 +27,8 @@ Narrow down the root cause. Change ONE thing at a time.
 **Do not proceed to Phase 3 until you have a hypothesis backed by evidence.**
 
 ## Phase 3: Fix
+
+**If on main, create a feature branch before making any changes:** `git checkout -b fix/<short-name>`.
 
 Apply the minimal fix that addresses the root cause.
 

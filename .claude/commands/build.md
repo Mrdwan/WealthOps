@@ -4,7 +4,7 @@ You are the orchestrator running the full build pipeline. You own this from star
 
 ## Mode
 
-If `$ARGUMENTS` contains "auto" or "autonomous": run in **auto mode**. Skip all checkpoints, make decisions autonomously, log them in the plan under a "Decisions" section. Create a feature branch (`feat/[short-name]`) before starting. Never ask questions — if something is ambiguous, decide and document.
+If `$ARGUMENTS` starts with `--auto`: run in **auto mode**. Strip `--auto` from `$ARGUMENTS` before processing the rest. Skip all checkpoints, make decisions autonomously, log them in the plan under a "Decisions" section. Create a feature branch (`feat/[short-name]`) before starting. Never ask questions — if something is ambiguous, decide and document.
 
 Otherwise: run in **interactive mode** (default). Ask questions and wait for approval at checkpoints.
 
@@ -64,8 +64,6 @@ Review the plan yourself for completeness and consistency before presenting it.
 
 ## Phase 3: Execute
 
-**Before the first commit in this session:** verify you're on a feature branch (`git branch --show-current`). If on main, create one: `git checkout -b feat/<feature-slug>`. In auto mode, this was already done. In interactive mode, ask the user if unsure about the branch name.
-
 For each task in dependency order:
 
 1. **Prepare a task prompt** for the `implementer` agent. Include:
@@ -119,7 +117,7 @@ If this fails:
 
 ## Phase 6: Manual Testing Guide
 
-At the end of every build session, provide the user a **Manual Testing Guide** specific to what was built. This is not optional — always include it.
+If the feature has user-facing behavior (new CLI commands, API changes, observable output), provide a **Manual Testing Guide**. Skip this phase for internal refactors, test-only changes, or config updates.
 
 ### Structure:
 

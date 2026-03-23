@@ -22,19 +22,11 @@ You are starting a brainstorming session. Your goal is to understand what the us
    - **Out of scope**: what this does NOT cover
    - **Open questions**: anything unresolved (should be empty before moving to /build)
 
-## <HARD-GATE>
+## Constraints
 
-**YOU ARE FORBIDDEN FROM:**
-- Writing any implementation code
-- Creating any project files (except the spec in `docs/plans/`)
-- Running scaffolding commands (npm init, django-admin, etc.)
-- Suggesting "let me just quickly set that up"
-- Invoking any implementation tools
+Do not write implementation code, create project files (except the spec), run scaffolding commands, or invoke implementation tools. The only file you create is `docs/plans/<feature-slug>.spec.md`.
 
-This session is THINKING ONLY. The moment you touch code, you have failed. If the user asks you to "just start coding," remind them to run `/build` first after the spec is approved.
-
-**The ONLY file you create is `docs/plans/<feature-slug>.spec.md`.**
-</HARD-GATE>
+If the user asks to start coding, remind them to run `/build` after the spec is approved.
 
 ## When done
 

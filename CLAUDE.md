@@ -37,10 +37,7 @@ Ruff runs automatically via the Stop hook — do not run it manually.
 
 ## Branching
 
-All work happens on feature branches. Never commit directly to main.
-- `/build` auto mode creates the branch automatically.
-- For `/quick`, `/debug`, or manual work: check your branch before starting. If on main, create a feature branch first: `git checkout -b type/short-name`
-- This is enforced by a PreToolUse hook — commits to main will be blocked.
+All work happens on feature branches.
 
 ## File Map
 
@@ -67,13 +64,7 @@ After 2 failed attempts on the same task, stop, report the blocker, and ask the 
 
 For risky or experimental tasks, use `isolation: "worktree"` when dispatching to the implementer. This gives it an isolated copy of the repo. Review changes before merging.
 
-### Context-Efficient Reading (Strict)
 
-**Opus may read at most 2 files directly per phase** — only when the content drives an immediate decision (e.g., the plan file to find the next task, a spec to choose an approach).
-
-**Everything else goes to an Explore agent.** Any time you need to understand existing code, check what's implemented, survey tests, or gather context across multiple files — dispatch an Explore agent with a focused question. Use the agent's summary, not raw file contents.
-
-Never read files "just to see what's there." If you catch yourself about to read a third file, stop and delegate instead.
 
 ## Context Management
 
