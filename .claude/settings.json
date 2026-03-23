@@ -58,5 +58,6 @@
         ]
       }
     ]
-  }
+  },
+  "enabledMcpjsonServers": ["context7"]
 }
