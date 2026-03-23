@@ -288,6 +288,61 @@ def compute_atr(
     return result
 
 
+def compute_wick_ratios(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute upper and lower wick ratios from OHLC data.
+
+    Upper wick: ``(high - max(open, close)) / (high - low)``.
+    Lower wick: ``(min(open, close) - low) / (high - low)``.
+    When ``high == low`` (zero range), both ratios are 0.0.
+
+    Args:
+        df: DataFrame with ``open``, ``high``, ``low``, ``close`` columns.
+
+    Returns:
+        DataFrame with ``upper_wick_ratio`` and ``lower_wick_ratio`` columns added.
+    """
+    body_high = df[["open", "close"]].max(axis=1)
+    body_low = df[["open", "close"]].min(axis=1)
+    candle_range = df["high"] - df["low"]
+
+    # Avoid division by zero when high == low
+    safe_range = candle_range.replace(0.0, np.nan)
+
+    upper = (df["high"] - body_high) / safe_range
+    lower = (body_low - df["low"]) / safe_range
+
+    result = df.copy()
+    result["upper_wick_ratio"] = upper.fillna(0.0)
+    result["lower_wick_ratio"] = lower.fillna(0.0)
+    return result
+
+
+def compute_distance_from_20d_low(
+    close: pd.Series,
+    low: pd.Series,
+    window: int = 20,
+) -> pd.Series:
+    """Compute distance from rolling low as a fraction of close.
+
+    Formula: ``(close - rolling_min(low, window)) / close``.
+
+    Args:
+        close: Series of closing prices.
+        low: Series of low prices.
+        window: Rolling window for minimum (default 20).
+
+    Returns:
+        Distance series. First ``window - 1`` values are NaN.
+
+    Raises:
+        ValueError: If window is less than 1.
+    """
+    if window < 1:
+        raise ValueError(f"window must be >= 1, got {window}")
+    rolling_low = low.rolling(window=window).min()
+    return (close - rolling_low) / close
+
+
 def compute_ema_fan(ema_8: pd.Series, ema_20: pd.Series, ema_50: pd.Series) -> pd.Series:
     """Check if EMAs are in bullish fan alignment.
 

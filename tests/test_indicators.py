@@ -7,11 +7,13 @@ import pytest
 from trading_advisor.indicators.technical import (
     compute_adx,
     compute_atr,
+    compute_distance_from_20d_low,
     compute_ema,
     compute_ema_fan,
     compute_macd_histogram,
     compute_rsi,
     compute_sma,
+    compute_wick_ratios,
 )
 
 
@@ -426,3 +428,124 @@ class TestComputeAtr:
         atr_flat = compute_atr(f_high, f_low, f_close, period=period)
 
         assert atr_volatile.iloc[-1] > atr_flat.iloc[-1]
+
+
+class TestComputeWickRatios:
+    """Tests for compute_wick_ratios."""
+
+    def test_known_values(self) -> None:
+        """Verify wick ratios match pre-computed values for 4-row OHLC example."""
+        data = {
+            "open": [10.0, 12.0, 11.0, 10.0],
+            "high": [14.0, 15.0, 11.0, 14.0],
+            "low": [8.0, 9.0, 11.0, 10.0],
+            "close": [12.0, 10.0, 11.0, 14.0],
+        }
+        df = pd.DataFrame(data, dtype=np.float64)
+        result = compute_wick_ratios(df)
+
+        # Row 0: bullish (C>O) → upper=(14-12)/(14-8)=2/6, lower=(10-8)/(14-8)=2/6
+        assert result["upper_wick_ratio"].iloc[0] == pytest.approx(1 / 3, abs=1e-5)
+        assert result["lower_wick_ratio"].iloc[0] == pytest.approx(1 / 3, abs=1e-5)
+
+        # Row 1: bearish (C<O) → upper=(15-12)/(15-9)=3/6=0.5, lower=(10-9)/(15-9)=1/6
+        assert result["upper_wick_ratio"].iloc[1] == pytest.approx(0.5, abs=1e-5)
+        assert result["lower_wick_ratio"].iloc[1] == pytest.approx(1 / 6, abs=1e-5)
+
+        # Row 2: doji (H=L=O=C=11) → zero range → both 0.0
+        assert result["upper_wick_ratio"].iloc[2] == pytest.approx(0.0, abs=1e-5)
+        assert result["lower_wick_ratio"].iloc[2] == pytest.approx(0.0, abs=1e-5)
+
+        # Row 3: full body (O=L=10, C=H=14) → no wicks → both 0.0
+        assert result["upper_wick_ratio"].iloc[3] == pytest.approx(0.0, abs=1e-5)
+        assert result["lower_wick_ratio"].iloc[3] == pytest.approx(0.0, abs=1e-5)
+
+    def test_zero_range_returns_zero(self) -> None:
+        """When high == low, both wick ratios must be 0.0 (no divide-by-zero crash)."""
+        df = pd.DataFrame(
+            {"open": [10.0], "high": [10.0], "low": [10.0], "close": [10.0]},
+            dtype=np.float64,
+        )
+        result = compute_wick_ratios(df)
+
+        assert result["upper_wick_ratio"].iloc[0] == pytest.approx(0.0)
+        assert result["lower_wick_ratio"].iloc[0] == pytest.approx(0.0)
+
+    def test_full_body_no_wicks(self) -> None:
+        """open==low and close==high → zero wicks on both sides."""
+        df = pd.DataFrame(
+            {"open": [5.0], "high": [10.0], "low": [5.0], "close": [10.0]},
+            dtype=np.float64,
+        )
+        result = compute_wick_ratios(df)
+
+        assert result["upper_wick_ratio"].iloc[0] == pytest.approx(0.0)
+        assert result["lower_wick_ratio"].iloc[0] == pytest.approx(0.0)
+
+    def test_ratios_between_0_and_1(self) -> None:
+        """All wick ratio values must lie in [0.0, 1.0]."""
+        rng = np.random.default_rng(42)
+        n = 50
+        lows = rng.uniform(1.0, 50.0, n)
+        highs = lows + rng.uniform(0.0, 10.0, n)
+        opens = lows + rng.uniform(0.0, 1.0, n) * (highs - lows)
+        closes = lows + rng.uniform(0.0, 1.0, n) * (highs - lows)
+        df = pd.DataFrame(
+            {"open": opens, "high": highs, "low": lows, "close": closes},
+            dtype=np.float64,
+        )
+        result = compute_wick_ratios(df)
+
+        assert (result["upper_wick_ratio"] >= 0.0).all()
+        assert (result["upper_wick_ratio"] <= 1.0).all()
+        assert (result["lower_wick_ratio"] >= 0.0).all()
+        assert (result["lower_wick_ratio"] <= 1.0).all()
+
+
+class TestComputeDistanceFrom20dLow:
+    """Tests for compute_distance_from_20d_low."""
+
+    def test_known_values_window_3(self) -> None:
+        """Verify distance values match pre-computed results with window=3."""
+        close = pd.Series([100.0, 102.0, 105.0, 103.0, 107.0], dtype=np.float64)
+        low = pd.Series([98.0, 99.0, 100.0, 97.0, 101.0], dtype=np.float64)
+        result = compute_distance_from_20d_low(close, low, window=3)
+
+        # First 2 (window-1) values must be NaN
+        assert pd.isna(result.iloc[0])
+        assert pd.isna(result.iloc[1])
+
+        # i=2: rolling_min(98,99,100)=98 → (105-98)/105 = 7/105
+        assert result.iloc[2] == pytest.approx(7.0 / 105.0, abs=1e-5)
+
+        # i=3: rolling_min(99,100,97)=97 → (103-97)/103 = 6/103
+        assert result.iloc[3] == pytest.approx(6.0 / 103.0, abs=1e-5)
+
+        # i=4: rolling_min(100,97,101)=97 → (107-97)/107 = 10/107
+        assert result.iloc[4] == pytest.approx(10.0 / 107.0, abs=1e-5)
+
+    def test_at_low_returns_zero(self) -> None:
+        """When close equals the rolling minimum low, distance must be 0.0."""
+        close = pd.Series([10.0, 10.0, 10.0], dtype=np.float64)
+        low = pd.Series([10.0, 10.0, 10.0], dtype=np.float64)
+        result = compute_distance_from_20d_low(close, low, window=3)
+
+        assert result.iloc[2] == pytest.approx(0.0)
+
+    def test_warmup_nan(self) -> None:
+        """First window-1 values must be NaN; index window-1 must be valid."""
+        n = 25
+        close = pd.Series([100.0 + float(i) for i in range(n)], dtype=np.float64)
+        low = pd.Series([99.0 + float(i) for i in range(n)], dtype=np.float64)
+        result = compute_distance_from_20d_low(close, low, window=20)
+
+        for i in range(19):
+            assert pd.isna(result.iloc[i]), f"Expected NaN at index {i}"
+        assert not pd.isna(result.iloc[19])
+
+    def test_invalid_window_raises(self) -> None:
+        """window < 1 must raise ValueError."""
+        close = pd.Series([100.0, 101.0, 102.0], dtype=np.float64)
+        low = pd.Series([99.0, 100.0, 101.0], dtype=np.float64)
+        with pytest.raises(ValueError):
+            compute_distance_from_20d_low(close, low, window=0)
