@@ -1,10 +1,14 @@
 """Tests for guard infrastructure: GuardResult, Guard ABC, and pipeline runner."""
 
 import dataclasses
+import datetime
+import json
+from pathlib import Path
 
 import pytest
 
 from trading_advisor.guards.base import Guard, GuardResult
+from trading_advisor.guards.event_guard import EventGuard, load_calendar
 from trading_advisor.guards.macro_gate import MacroGate
 from trading_advisor.guards.pipeline import run_guards
 from trading_advisor.guards.trend_gate import TrendGate
@@ -195,3 +199,107 @@ class TestTrendGate:
 
     def test_name(self) -> None:
         assert TrendGate().name == "TrendGate"
+
+
+# ---------------------------------------------------------------------------
+# EventGuard
+# ---------------------------------------------------------------------------
+
+
+class TestEventGuard:
+    """Tests for Guard 3: Event Guard (5-day exclusion window)."""
+
+    def _guard(self, *dates: datetime.date) -> EventGuard:
+        return EventGuard(list(dates))
+
+    def test_pass_3_days_before(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 17))
+        assert result.passed is True
+
+    def test_fail_2_days_before(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 18))
+        assert result.passed is False
+
+    def test_fail_1_day_before(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 19))
+        assert result.passed is False
+
+    def test_fail_day_of(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 20))
+        assert result.passed is False
+        assert "0d" in result.reason
+
+    def test_fail_1_day_after(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 21))
+        assert result.passed is False
+
+    def test_fail_2_days_after(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 22))
+        assert result.passed is False
+
+    def test_pass_3_days_after(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 23))
+        assert result.passed is True
+
+    def test_pass_between_distant_events(self) -> None:
+        guard = self._guard(
+            datetime.date(2024, 1, 10),
+            datetime.date(2024, 1, 20),
+        )
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 1, 15))
+        assert result.passed is True  # 5 days from both
+
+    def test_empty_calendar_always_passes(self) -> None:
+        guard = self._guard()  # no events
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 6, 15))
+        assert result.passed is True
+
+    def test_name(self) -> None:
+        assert self._guard().name == "EventGuard"
+
+    def test_reason_contains_event_date(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        result = guard.evaluate(evaluation_date=datetime.date(2024, 3, 18))
+        assert "2024-03-20" in result.reason
+
+    def test_raises_on_non_date_evaluation_date(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        with pytest.raises(TypeError, match="evaluation_date must be"):
+            guard.evaluate(evaluation_date="2024-03-18")
+
+    def test_raises_on_missing_evaluation_date(self) -> None:
+        guard = self._guard(datetime.date(2024, 3, 20))
+        with pytest.raises(KeyError):
+            guard.evaluate()
+
+
+class TestLoadCalendar:
+    """Tests for the load_calendar helper."""
+
+    def test_load_merges_and_deduplicates(self, tmp_path: Path) -> None:
+        cal = {
+            "fomc": ["2024-03-20", "2024-06-12"],
+            "nfp": ["2024-03-08", "2024-03-20"],  # 03-20 duplicated
+            "cpi": ["2024-03-12"],
+            "_comment": "should be ignored",
+            "_notes": ["2024-12-25"],  # underscore key with list value — still ignored
+        }
+        p = tmp_path / "cal.json"
+        p.write_text(json.dumps(cal))
+        dates = load_calendar(p)
+        assert len(dates) == 4  # 5 entries, 1 duplicate = 4 unique; _notes date excluded
+        assert dates == sorted(dates)  # sorted
+
+    def test_load_empty_calendar(self, tmp_path: Path) -> None:
+        cal: dict[str, list[str]] = {"fomc": [], "nfp": [], "cpi": []}
+        p = tmp_path / "cal.json"
+        p.write_text(json.dumps(cal))
+        dates = load_calendar(p)
+        assert dates == []
