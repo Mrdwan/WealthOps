@@ -66,16 +66,26 @@ Review the plan yourself for completeness and consistency before presenting it.
 
 For each task in dependency order:
 
-1. **Prepare a task prompt** for the `implementer` agent. Include:
+1. **Choose the model** for the implementer dispatch:
+   - **haiku**: Mechanical tasks — re-exports, renaming, docstrings, `__init__.py` updates
+   - **sonnet**: Standard coding where the prompt contains all expected test values pre-computed
+   - **opus**: Math-heavy implementations, debugging, tasks requiring the implementer to derive expected values
+
+2. **Prepare a task prompt** for the `implementer` agent. The implementer has no project context beyond what you provide — the prompt must be fully self-contained. Include:
    - The exact task description (copy it — don't reference the plan file)
    - File paths to read (NOT inline content — the implementer reads files itself)
+   - Relevant interfaces/types the code must interact with (DataFrame schemas, existing function signatures, ABC contracts)
+   - Project conventions: `uv run` for all commands, `mypy --strict`, Google-style docstrings, full type annotations
+   - **Pre-computed expected test values** — do the math yourself (you have thinking/reasoning). Never say "figure it out" or "let pandas compute it." If you can't pre-compute, use opus for the dispatch.
    - Test and verify instructions
 
-2. **Dispatch**: "Use the implementer agent to: [full task prompt]"
+   Before dispatching, review the prompt: **"Could a developer implement this with zero questions?"** If not, flesh it out.
 
-3. **Review the result**: Check test and mypy output from the implementer. If the implementer didn't run verification, run the commands from CLAUDE.md. After 2 failed dispatches for the same task, stop and report the blocker.
+3. **Dispatch** to the implementer with the chosen model.
 
-4. **Review**: Use the `reviewer` agent. Tell it exactly which files the implementer created/modified (both source and test files). It will:
+4. **Review the result**: Check test and mypy output from the implementer. If the implementer didn't run verification, run the commands from CLAUDE.md. After 2 failed dispatches for the same task, stop and report the blocker.
+
+5. **Review**: Use the `reviewer` agent. Tell it exactly which files the implementer created/modified (both source and test files). It will:
    - Review code quality and best practices
    - Check whether tests are meaningful
    - Mutate the implementation to see if tests actually catch real bugs
@@ -85,13 +95,13 @@ For each task in dependency order:
 
    If the reviewer returns **PASS**: proceed to commit.
 
-5. **Commit**:
+6. **Commit**:
    ```bash
    git add [specific files]
    git commit -m "type: [task short name]"
    ```
 
-6. **Mark complete** in the plan file, move to next task.
+7. **Mark complete** in the plan file, move to next task.
 
 If you need to explore multiple parts of the codebase before planning, use parallel Explore agents (background) to investigate independently. Synthesize their findings before planning.
 

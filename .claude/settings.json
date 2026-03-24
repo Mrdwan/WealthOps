@@ -28,7 +28,10 @@
       "Bash(uv:*)",
       "Bash(wc:*)",
       "Bash(git stash:*)",
-      "Bash(git switch:*)"
+      "Bash(git switch:*)",
+      "Bash(md5:*)",
+      "Bash(find *)",
+      "Bash(diff *)"
     ]
   },
   "hooks": {
@@ -58,5 +61,6 @@
         ]
       }
     ]
-  }
+  },
+  "enabledMcpjsonServers": ["context7"]
 }
