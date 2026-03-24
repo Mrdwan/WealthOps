@@ -11,6 +11,7 @@ from trading_advisor.guards.base import Guard, GuardResult
 from trading_advisor.guards.event_guard import EventGuard, load_calendar
 from trading_advisor.guards.macro_gate import MacroGate
 from trading_advisor.guards.pipeline import run_guards
+from trading_advisor.guards.pullback_zone import PullbackZone
 from trading_advisor.guards.trend_gate import TrendGate
 
 
@@ -303,3 +304,57 @@ class TestLoadCalendar:
         p.write_text(json.dumps(cal))
         dates = load_calendar(p)
         assert dates == []
+
+
+# ---------------------------------------------------------------------------
+# PullbackZone
+# ---------------------------------------------------------------------------
+
+
+class TestPullbackZone:
+    """Tests for Guard 4: Pullback Zone ((close - EMA_8) / EMA_8 <= 2%)."""
+
+    def test_pass_small_positive_distance(self) -> None:
+        """close=2050, ema_8=2030 → distance=20/2030≈0.00985 → pass."""
+        guard = PullbackZone()
+        result = guard.evaluate(close=2050.0, ema_8=2030.0)
+        assert result.passed is True
+        assert result.guard_name == "PullbackZone"
+
+    def test_fail_extended(self) -> None:
+        """close=2100, ema_8=2030 → distance=70/2030≈0.03448 → fail."""
+        guard = PullbackZone()
+        result = guard.evaluate(close=2100.0, ema_8=2030.0)
+        assert result.passed is False
+        assert ">" in result.reason
+
+    def test_pass_exactly_2_percent(self) -> None:
+        """close=102.0, ema_8=100.0 → distance=2/100=0.02 exactly → pass."""
+        guard = PullbackZone()
+        result = guard.evaluate(close=102.0, ema_8=100.0)
+        assert result.passed is True  # <= 0.02
+
+    def test_fail_barely_above_2_percent(self) -> None:
+        """close=102.1, ema_8=100 → distance=0.021 → fail."""
+        guard = PullbackZone()
+        result = guard.evaluate(close=102.1, ema_8=100.0)
+        assert result.passed is False
+
+    def test_pass_negative_distance(self) -> None:
+        """close=2000, ema_8=2030 → distance=-30/2030≈-0.01478 → pass."""
+        guard = PullbackZone()
+        result = guard.evaluate(close=2000.0, ema_8=2030.0)
+        assert result.passed is True  # negative = below EMA = not chasing
+
+    def test_reason_contains_distance(self) -> None:
+        guard = PullbackZone()
+        result = guard.evaluate(close=2050.0, ema_8=2030.0)
+        assert "0.0099" in result.reason  # 20/2030 ≈ 0.009852...
+
+    def test_reason_contains_threshold(self) -> None:
+        guard = PullbackZone()
+        result = guard.evaluate(close=2050.0, ema_8=2030.0)
+        assert "0.02" in result.reason
+
+    def test_name(self) -> None:
+        assert PullbackZone().name == "PullbackZone"
