@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from trading_advisor.guards.base import Guard, GuardResult
+from trading_advisor.guards.drawdown_gate import DrawdownGate
 from trading_advisor.guards.event_guard import EventGuard, load_calendar
 from trading_advisor.guards.macro_gate import MacroGate
 from trading_advisor.guards.pipeline import run_guards
@@ -358,3 +359,41 @@ class TestPullbackZone:
 
     def test_name(self) -> None:
         assert PullbackZone().name == "PullbackZone"
+
+
+# ---------------------------------------------------------------------------
+# DrawdownGate
+# ---------------------------------------------------------------------------
+
+
+class TestDrawdownGate:
+    """Tests for Guard 5: Drawdown Gate (drawdown < 15%)."""
+
+    def test_pass_no_drawdown(self) -> None:
+        gate = DrawdownGate()
+        result = gate.evaluate(drawdown=0.0)
+        assert result.passed is True
+        assert result.guard_name == "DrawdownGate"
+
+    def test_pass_moderate_drawdown(self) -> None:
+        gate = DrawdownGate()
+        result = gate.evaluate(drawdown=0.149)
+        assert result.passed is True
+
+    def test_fail_at_threshold(self) -> None:
+        gate = DrawdownGate()
+        result = gate.evaluate(drawdown=0.15)
+        assert result.passed is False  # strict < 15%
+
+    def test_fail_deep_drawdown(self) -> None:
+        gate = DrawdownGate()
+        result = gate.evaluate(drawdown=0.20)
+        assert result.passed is False
+
+    def test_reason_contains_percentage(self) -> None:
+        gate = DrawdownGate()
+        result = gate.evaluate(drawdown=0.10)
+        assert "10.0%" in result.reason
+
+    def test_name(self) -> None:
+        assert DrawdownGate().name == "DrawdownGate"
