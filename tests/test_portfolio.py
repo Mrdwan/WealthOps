@@ -367,6 +367,101 @@ def test_corrupted_closed_trades_raises(tmp_path: Path) -> None:
         _ = mgr.state
 
 
+def test_corrupted_positions_non_list_raises(tmp_path: Path) -> None:
+    """Non-list positions field must raise TypeError."""
+    storage = LocalStorage(tmp_path)
+    state_data: dict[str, object] = {
+        "cash": 15000.0,
+        "positions": "not_a_list",
+        "high_water_mark": 15000.0,
+        "throttle_state": "NORMAL",
+        "closed_trades": [],
+    }
+    storage.write_json("state/portfolio", state_data)
+    mgr = PortfolioManager(storage)
+    with pytest.raises(TypeError, match="positions"):
+        _ = mgr.state
+
+
+def test_corrupted_position_entry_non_dict_raises(tmp_path: Path) -> None:
+    """Non-dict entry in positions list must raise TypeError."""
+    storage = LocalStorage(tmp_path)
+    state_data: dict[str, object] = {
+        "cash": 15000.0,
+        "positions": ["not_a_dict"],
+        "high_water_mark": 15000.0,
+        "throttle_state": "NORMAL",
+        "closed_trades": [],
+    }
+    storage.write_json("state/portfolio", state_data)
+    mgr = PortfolioManager(storage)
+    with pytest.raises(TypeError, match="positions"):
+        _ = mgr.state
+
+
+def test_corrupted_closed_trades_non_list_raises(tmp_path: Path) -> None:
+    """Non-list closed_trades field must raise TypeError."""
+    storage = LocalStorage(tmp_path)
+    state_data: dict[str, object] = {
+        "cash": 15000.0,
+        "positions": [],
+        "high_water_mark": 15000.0,
+        "throttle_state": "NORMAL",
+        "closed_trades": "not_a_list",
+    }
+    storage.write_json("state/portfolio", state_data)
+    mgr = PortfolioManager(storage)
+    with pytest.raises(TypeError, match="closed_trades"):
+        _ = mgr.state
+
+
+def test_close_position_symbol_not_found_raises(manager: PortfolioManager) -> None:
+    """close_position raises ValueError when symbol has no open position."""
+    manager.update_equity(15000.0)
+    with pytest.raises(ValueError, match="No open position"):
+        manager.close_position("NONEXISTENT", exit_price=2100.0, size=0.5)
+
+
+def test_get_drawdown_zero_when_no_hwm(manager: PortfolioManager) -> None:
+    """get_drawdown returns 0.0 when high_water_mark is 0 (no equity set)."""
+    assert manager.get_drawdown() == 0.0
+
+
+def test_get_throttle_state_default(manager: PortfolioManager) -> None:
+    """get_throttle_state returns NORMAL on fresh manager."""
+    assert manager.get_throttle_state() == ThrottleState.NORMAL
+
+
+def test_close_position_second_in_list(manager: PortfolioManager) -> None:
+    """Closing the second of two positions iterates past the first (branch coverage)."""
+    manager.update_equity(20000.0)
+    pos1 = Position(
+        symbol="XAUUSD",
+        entry_price=2000.0,
+        size=0.5,
+        entry_date=datetime.date(2024, 6, 1),
+        stop_loss=1950.0,
+        take_profit=2100.0,
+        signal_atr=30.0,
+    )
+    pos2 = Position(
+        symbol="EURUSD",
+        entry_price=1.10,
+        size=1.0,
+        entry_date=datetime.date(2024, 6, 2),
+        stop_loss=1.08,
+        take_profit=1.15,
+        signal_atr=0.005,
+    )
+    manager.open_position(pos1)
+    manager.open_position(pos2)
+    pnl = manager.close_position("EURUSD", exit_price=1.12, size=1.0)
+    assert pnl == pytest.approx(0.02)
+    state = manager.state
+    assert len(state.positions) == 1
+    assert state.positions[0].symbol == "XAUUSD"
+
+
 # ------------------------------------------------------------------
 # Persistence
 # ------------------------------------------------------------------

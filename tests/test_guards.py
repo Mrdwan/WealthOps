@@ -306,6 +306,27 @@ class TestLoadCalendar:
         dates = load_calendar(p)
         assert dates == []
 
+    def test_load_skips_non_list_values(self, tmp_path: Path) -> None:
+        """Keys with non-list values (e.g. a string metadata field) are skipped."""
+        cal: dict[str, object] = {
+            "fomc": ["2024-03-20"],
+            "description": "a string, not a list",  # non-list value
+        }
+        p = tmp_path / "cal.json"
+        p.write_text(json.dumps(cal))
+        dates = load_calendar(p)
+        assert dates == [datetime.date(2024, 3, 20)]
+
+    def test_load_skips_non_string_entries_in_list(self, tmp_path: Path) -> None:
+        """Non-string entries inside a date list are skipped without error."""
+        cal: dict[str, object] = {
+            "fomc": ["2024-03-20", 12345, None],  # mixed types
+        }
+        p = tmp_path / "cal.json"
+        p.write_text(json.dumps(cal))
+        dates = load_calendar(p)
+        assert dates == [datetime.date(2024, 3, 20)]
+
 
 # ---------------------------------------------------------------------------
 # PullbackZone
