@@ -5,7 +5,9 @@ import dataclasses
 import pytest
 
 from trading_advisor.guards.base import Guard, GuardResult
+from trading_advisor.guards.macro_gate import MacroGate
 from trading_advisor.guards.pipeline import run_guards
+from trading_advisor.guards.trend_gate import TrendGate
 
 
 class _StubGuard(Guard):
@@ -127,3 +129,69 @@ def test_run_guards_kwargs_forwarded() -> None:
 
     assert len(results) == 1
     assert "25.0" in results[0].reason
+
+
+# ---------------------------------------------------------------------------
+# MacroGate
+# ---------------------------------------------------------------------------
+
+
+class TestMacroGate:
+    """Tests for Guard 1: Macro Gate (EUR/USD close > EUR/USD 200 SMA)."""
+
+    def test_pass_eurusd_above_sma(self) -> None:
+        gate = MacroGate()
+        result = gate.evaluate(eurusd_close=1.10, eurusd_sma_200=1.05)
+        assert result.passed is True
+        assert result.guard_name == "MacroGate"
+        assert "1.1000" in result.reason
+        assert "1.0500" in result.reason
+
+    def test_fail_eurusd_below_sma(self) -> None:
+        gate = MacroGate()
+        result = gate.evaluate(eurusd_close=1.02, eurusd_sma_200=1.05)
+        assert result.passed is False
+        assert "<=" in result.reason
+
+    def test_fail_eurusd_exactly_at_sma(self) -> None:
+        gate = MacroGate()
+        result = gate.evaluate(eurusd_close=1.05, eurusd_sma_200=1.05)
+        assert result.passed is False  # not strictly >
+
+    def test_name(self) -> None:
+        assert MacroGate().name == "MacroGate"
+
+
+# ---------------------------------------------------------------------------
+# TrendGate
+# ---------------------------------------------------------------------------
+
+
+class TestTrendGate:
+    """Tests for Guard 2: Trend Gate (ADX > 20)."""
+
+    def test_pass_adx_above_threshold(self) -> None:
+        gate = TrendGate()
+        result = gate.evaluate(adx=25.0)
+        assert result.passed is True
+        assert result.guard_name == "TrendGate"
+        assert "25.0" in result.reason
+
+    def test_fail_adx_below_threshold(self) -> None:
+        gate = TrendGate()
+        result = gate.evaluate(adx=15.0)
+        assert result.passed is False
+        assert "<=" in result.reason
+
+    def test_fail_adx_exactly_20(self) -> None:
+        gate = TrendGate()
+        result = gate.evaluate(adx=20.0)
+        assert result.passed is False  # not strictly >
+
+    def test_pass_adx_barely_above(self) -> None:
+        gate = TrendGate()
+        result = gate.evaluate(adx=20.01)
+        assert result.passed is True
+
+    def test_name(self) -> None:
+        assert TrendGate().name == "TrendGate"
