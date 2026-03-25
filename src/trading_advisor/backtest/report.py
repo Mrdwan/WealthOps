@@ -232,9 +232,7 @@ def _build_trade_log_table(result: BacktestResult) -> str:
         rows.append(f"<tr>{''.join(cells)}</tr>")
 
     body = "\n".join(rows)
-    return (
-        "<table>\n" f"<thead><tr>{header_row}</tr></thead>\n" f"<tbody>{body}</tbody>\n" "</table>"
-    )
+    return f"<table>\n<thead><tr>{header_row}</tr></thead>\n<tbody>{body}</tbody>\n</table>"
 
 
 def _build_equity_chart(result: BacktestResult) -> str:
