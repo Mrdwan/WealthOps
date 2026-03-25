@@ -31,7 +31,8 @@
       "Bash(git switch:*)",
       "Bash(md5:*)",
       "Bash(find *)",
-      "Bash(diff *)"
+      "Bash(diff *)",
+      "Bash(python3:*)"
     ]
   },
   "hooks": {

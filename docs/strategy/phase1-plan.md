@@ -300,9 +300,9 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 ## Current Status
 
-**Active task:** Task 1C (Guards)
+**Active task:** Task 1D (Signal Generation)
 **Blockers:** None
-**Last updated:** 2026-03-23
+**Last updated:** 2026-03-24
 
 ---
 
@@ -465,47 +465,47 @@ Everything depends on these. Build before any feature work.
 
 #### Infrastructure
 
-- [ ] **1C.1 — Guard ABC + GuardResult dataclass**
+- [x] **1C.1 — Guard ABC + GuardResult dataclass**
   - `guards/base.py`: abstract `Guard` with `evaluate()` method
   - `GuardResult` frozen dataclass: `passed`, `guard_name`, `reason`
   - Unit tests: construction, GUARDS_ENABLED toggle logic
 
-- [ ] **1C.2 — Guard pipeline runner**
+- [x] **1C.2 — Guard pipeline runner**
   - `run_guards()`: iterates enabled guards, skips disabled, returns `List[GuardResult]`
   - Signal valid only if all enabled guards pass. Disabled → logged as SKIPPED.
   - Unit tests: all pass, one fails, disabled → skipped, all disabled → passes
 
 #### Individual Guards
 
-- [ ] **1C.3 — Macro Gate**
+- [x] **1C.3 — Macro Gate**
   - EUR/USD close > EUR/USD 200 SMA → pass
   - 200 SMA calculated on EUR/USD data (not gold)
   - Unit tests: above → pass, below → fail, exactly at → edge case
 
-- [ ] **1C.4 — Trend Gate**
+- [x] **1C.4 — Trend Gate**
   - ADX(14) > 20 → pass
   - Unit tests: ADX=25 → pass, ADX=15 → fail, ADX=20 → fail (not > 20)
 
-- [ ] **1C.5 — Economic calendar JSON + generation script**
+- [x] **1C.5 — Economic calendar JSON + generation script**
   - `data/calendars/economic_calendar.json` covering 2016–2027
   - Helper script to generate NFP dates (first Friday of each month)
   - FOMC/CPI from published schedules
   - Validation: no duplicates, valid dates, sorted
 
-- [ ] **1C.6 — Event Guard**
+- [x] **1C.6 — Event Guard**
   - No FOMC/NFP/CPI within 2 calendar days in either direction → pass
   - 5-day window: 2 before + event day + 2 after
   - Unit tests: 3 before → pass, 2 before → fail, day of → fail, 2 after → fail, 3 after → pass
   - Test weekend handling
 
-- [ ] **1C.7 — Pullback Zone**
+- [x] **1C.7 — Pullback Zone**
   - `(Close - EMA_8) / EMA_8 <= 0.02` → pass
   - Negative distance passes (intentional)
   - Unit tests: 1% → pass, 3% → fail, 2% → pass (<=), negative → pass
 
 #### Portfolio Manager (dependency for Drawdown Gate and sizing)
 
-- [ ] **1C.8 — Portfolio Manager**
+- [x] **1C.8 — Portfolio Manager**
   - `portfolio/manager.py`: reads/writes portfolio state via StorageBackend
   - Tracks: cash, equity, positions, high_water_mark, drawdown_pct, throttle_state, closed_trades
   - Methods: `open_position()`, `close_position()`, `update_equity()`, `get_drawdown()`, `get_throttle_state()`, `resume_from_halted()`
@@ -515,14 +515,14 @@ Everything depends on these. Build before any feature work.
   - `resume_from_halted()`: evaluates current DD → places in correct state (not blindly NORMAL)
   - Unit tests: open/close, drawdown calc, state transitions at 8%/12%/15%, recovery, THROTTLED_MAX1 halves AND caps, resume DD evaluation
 
-- [ ] **1C.9 — Drawdown Gate**
+- [x] **1C.9 — Drawdown Gate**
   - Drawdown < 15% → pass (HALTED → fail)
   - Only checks 15% halt. Throttling at 8%/12% is in sizing.
   - Unit tests: 0% → pass, 14.9% → pass, 15% → fail, 20% → fail
 
 #### Integration
 
-- [ ] **1C.10 — Guard system integration test**
+- [x] **1C.10 — Guard system integration test**
   - Synthetic data → indicators → all guards → pipeline result
   - Scenarios: all pass, single fail, multiple fail, disabled → skipped
   - Verify reason strings are informative
