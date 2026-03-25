@@ -2,6 +2,7 @@
 
 from trading_advisor.backtest.engine import (
     BacktestAccount,
+    BacktestParams,
     BacktestResult,
     ExitEvent,
     ExitReason,
@@ -14,6 +15,7 @@ from trading_advisor.backtest.report import compute_metrics, generate_report
 
 __all__ = [
     "BacktestAccount",
+    "BacktestParams",
     "BacktestResult",
     "ExitEvent",
     "ExitReason",

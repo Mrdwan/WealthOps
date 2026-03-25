@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from trading_advisor.backtest.engine import (
+    BacktestParams,
     ExitReason,
     _to_date,
     run_backtest,
@@ -19,7 +20,12 @@ from trading_advisor.guards.base import Guard, GuardResult
 
 
 def _make_indicators(n: int, **overrides: Any) -> pd.DataFrame:
-    """Build n rows of synthetic indicator data with sensible defaults."""
+    """Build n rows of synthetic indicator data with sensible defaults.
+
+    When ``signal`` is overridden but ``composite`` is not, positions with
+    signal ``"BUY"`` or ``"STRONG_BUY"`` automatically receive composite=2.0
+    so the composite-threshold signal check fires correctly.
+    """
     dates = pd.bdate_range("2024-01-01", periods=n, freq="B")
     data: dict[str, Any] = {
         "open": [2000.0] * n,
@@ -36,6 +42,13 @@ def _make_indicators(n: int, **overrides: Any) -> pd.DataFrame:
         "signal": ["NEUTRAL"] * n,
     }
     data.update(overrides)
+    # Derive composite from signal when composite was not explicitly provided.
+    if "signal" in overrides and "composite" not in overrides:
+        composite: list[float] = list(data["composite"])
+        for i, sig in enumerate(data["signal"]):
+            if sig in ("BUY", "STRONG_BUY"):
+                composite[i] = 2.0
+        data["composite"] = composite
     return pd.DataFrame(data, index=dates)
 
 
@@ -934,3 +947,244 @@ class TestToDate:
 
         with pytest.raises(TypeError, match="Cannot convert"):
             _to_date(_FakeDateable())
+
+
+# ------------------------------------------------------------------
+# Test: BacktestParams overrides
+# ------------------------------------------------------------------
+
+
+class TestBacktestParams:
+    """Tests for BacktestParams overrides."""
+
+    def test_default_params_matches_existing_behavior(self) -> None:
+        """run_backtest with explicit default BacktestParams == no params."""
+        n = 20
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"
+        highs = [2010.0] * n
+        highs[3] = 2020.0  # fill day
+        lows = [1990.0] * n
+        lows[5] = 1900.0  # SL hit
+
+        indicators = _make_indicators(
+            n, signal=signals, high=highs, low=lows, composite=[0.0] * 2 + [2.0] + [0.0] * 17
+        )
+        eurusd = _make_eurusd(n)
+
+        r1 = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            starting_capital=15000.0,
+        )
+        r2 = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            starting_capital=15000.0,
+            params=BacktestParams(),
+        )
+        assert len(r1.trades) == len(r2.trades)
+        assert len(r1.trades) > 0, "Expected trades from test scenario"
+        assert len(r2.trades) > 0, "Expected trades from test scenario"
+        assert r1.trades[0].pnl == pytest.approx(r2.trades[0].pnl)
+
+    def test_custom_atr_multiplier_changes_sl(self) -> None:
+        """Higher ATR mult = wider stop loss = different exit behavior."""
+        n = 20
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"
+        composites = [0.0] * n
+        composites[2] = 2.0
+        highs = [2010.0] * n
+        highs[3] = 2020.0
+        lows = [1990.0] * n
+        # SL with atr_mult=2: entry(2011) - 2*50 = 1911
+        # SL with atr_mult=3: entry(2011) - 3*50 = 1861
+        # Low at 1900 triggers SL for mult=2 but NOT for mult=3
+        lows[5] = 1900.0
+
+        indicators = _make_indicators(n, signal=signals, high=highs, low=lows, composite=composites)
+        eurusd = _make_eurusd(n)
+
+        r_default = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(atr_multiplier=2.0),
+        )
+        r_wide = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(atr_multiplier=3.0),
+        )
+        # Default (2.0) should hit SL, wide (3.0) should NOT hit SL on day 5
+        sl_trades = [t for t in r_default.trades if t.exit_reason == ExitReason.STOP_LOSS]
+        assert len(sl_trades) > 0, "Default ATR mult should trigger SL"
+        # Wide ATR (3.0): SL = 2011 - 3*50 = 1861, low only goes to 1900 -> no SL hit
+        assert len(r_wide.trades) > 0, "Expected trades with wide ATR"
+        assert all(
+            t.exit_reason != ExitReason.STOP_LOSS for t in r_wide.trades
+        ), "Wide ATR mult should NOT trigger SL (SL=1861, low=1900)"
+        # Should exit via time stop instead
+        assert all(
+            t.exit_reason == ExitReason.TIME_STOP for t in r_wide.trades
+        ), "Wide ATR trade should exit via time stop"
+
+    def test_composite_threshold_controls_signal(self) -> None:
+        """Higher threshold = fewer signals."""
+        n = 20
+        composites = [0.0] * n
+        composites[2] = 1.8  # Above 1.5 (default) but below 2.5
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"  # legacy field, ignored when params used
+        highs = [2010.0] * n
+        highs[3] = 2020.0
+        lows = [1990.0] * n
+        lows[10] = 1900.0  # eventual SL
+
+        indicators = _make_indicators(n, signal=signals, high=highs, low=lows, composite=composites)
+        eurusd = _make_eurusd(n)
+
+        r_low = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(composite_buy_threshold=1.5),
+        )
+        r_high = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(composite_buy_threshold=2.5),
+        )
+        # Low threshold (1.5): composite 1.8 > 1.5 -> fires signal -> should have trades
+        assert len(r_low.trades) > 0
+        # High threshold (2.5): composite 1.8 < 2.5 -> no signal -> no trades
+        assert len(r_high.trades) == 0
+
+    def test_fill_price_offset_midpoint(self) -> None:
+        """fill_price_offset=0.5 fills at midpoint of buy_stop to limit."""
+        n = 20
+        composites = [0.0] * n
+        composites[2] = 2.0
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"
+        highs = [2010.0] * n
+        highs[3] = 2020.0
+        lows = [1990.0] * n
+        lows[10] = 1800.0  # ensure SL hit
+
+        indicators = _make_indicators(n, signal=signals, high=highs, low=lows, composite=composites)
+        eurusd = _make_eurusd(n)
+
+        # buy_stop = 2010 + 0.02*50 = 2011
+        # limit = 2011 + 0.05*50 = 2013.5
+        # midpoint = 2011 + 0.5*(2013.5-2011) = 2012.25
+
+        r_default = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(fill_price_offset=0.0),
+        )
+        r_mid = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(fill_price_offset=0.5),
+        )
+        assert len(r_default.trades) > 0, "Expected trades with default fill"
+        assert len(r_mid.trades) > 0, "Expected trades with midpoint fill"
+        assert r_default.trades[0].entry_price == pytest.approx(2011.0)
+        assert r_mid.trades[0].entry_price == pytest.approx(2012.25)
+
+    def test_composite_at_exact_threshold_no_signal(self) -> None:
+        """Composite exactly at threshold does not fire (strict >)."""
+        n = 20
+        composites = [0.0] * n
+        composites[2] = 1.5  # Exactly at default threshold
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"
+        highs = [2010.0] * n
+        highs[3] = 2020.0
+        lows = [1990.0] * n
+
+        indicators = _make_indicators(n, signal=signals, high=highs, low=lows, composite=composites)
+        eurusd = _make_eurusd(n)
+
+        result = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(composite_buy_threshold=1.5),
+        )
+        assert len(result.trades) == 0, "Composite exactly at threshold should NOT fire signal"
+
+    def test_composite_just_above_threshold_fires(self) -> None:
+        """Composite just above threshold fires signal."""
+        n = 20
+        composites = [0.0] * n
+        composites[2] = 1.5001
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"
+        highs = [2010.0] * n
+        highs[3] = 2020.0
+        lows = [1990.0] * n
+        lows[10] = 1800.0  # ensure exit
+
+        indicators = _make_indicators(n, signal=signals, high=highs, low=lows, composite=composites)
+        eurusd = _make_eurusd(n)
+
+        result = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+            params=BacktestParams(composite_buy_threshold=1.5),
+        )
+        assert len(result.trades) > 0, "Composite just above threshold should fire signal"
+
+    def test_nan_composite_no_signal(self) -> None:
+        """NaN composite does not fire signal and does not crash."""
+        n = 20
+        composites: list[float] = [0.0] * n
+        composites[2] = float("nan")
+        signals = ["NEUTRAL"] * n
+        signals[2] = "BUY"
+        highs = [2010.0] * n
+        highs[3] = 2020.0
+        lows = [1990.0] * n
+
+        indicators = _make_indicators(n, signal=signals, high=highs, low=lows, composite=composites)
+        eurusd = _make_eurusd(n)
+
+        result = run_backtest(
+            indicators=indicators,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=_empty_fedfunds(),
+        )
+        assert len(result.trades) == 0

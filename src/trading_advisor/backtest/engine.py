@@ -21,13 +21,8 @@ import pandas as pd
 
 from trading_advisor.guards.base import Guard
 from trading_advisor.guards.pipeline import run_guards
-from trading_advisor.indicators.composite import Signal
 from trading_advisor.portfolio.manager import ThrottleState
-from trading_advisor.strategy.orders import (
-    compute_stop_loss,
-    compute_take_profit,
-    compute_trap_order,
-)
+from trading_advisor.strategy.orders import compute_trap_order
 from trading_advisor.strategy.sizing import compute_position_size
 
 # ------------------------------------------------------------------
@@ -39,6 +34,29 @@ _DD_MAX1: float = 0.12
 _DD_THROTTLE: float = 0.08
 _DD_RECOVERY_NORMAL: float = 0.06
 _TIME_STOP_DAYS: int = 10
+
+
+@dataclass(frozen=True)
+class BacktestParams:
+    """Overrideable backtest parameters for sensitivity testing.
+
+    All fields have defaults matching the production strategy. Pass a
+    custom instance to ``run_backtest`` to test parameter variations.
+
+    Attributes:
+        atr_multiplier: ATR multiplier for stop-loss and trailing stop (default 2.0).
+        tp_clamp_min: Minimum TP multiplier after ADX scaling (default 2.5).
+        tp_clamp_max: Maximum TP multiplier after ADX scaling (default 4.5).
+        fill_price_offset: Fraction of buy_stop-to-limit range for fill price.
+            0.0 = fill at buy_stop (default), 0.5 = midpoint, 1.0 = limit.
+        composite_buy_threshold: Minimum composite z-score for BUY signal (default 1.5).
+    """
+
+    atr_multiplier: float = 2.0
+    tp_clamp_min: float = 2.5
+    tp_clamp_max: float = 4.5
+    fill_price_offset: float = 0.0
+    composite_buy_threshold: float = 1.5
 
 
 # ------------------------------------------------------------------
@@ -543,6 +561,7 @@ def run_backtest(
     starting_capital: float = 15000.0,
     spread_per_side: float = 0.3,
     slippage_per_side: float = 0.1,
+    params: BacktestParams | None = None,
 ) -> BacktestResult:
     """Run a backtest simulation on pre-computed indicator data.
 
@@ -563,6 +582,8 @@ def run_backtest(
         starting_capital: Initial account balance.
         spread_per_side: Spread cost per side in points.
         slippage_per_side: Slippage cost per side in points.
+        params: Optional BacktestParams for sensitivity testing. If None,
+            uses default BacktestParams (production strategy values).
 
     Returns:
         BacktestResult with equity curve, trade log, and date range.
@@ -572,6 +593,8 @@ def run_backtest(
     """
     if indicators.empty:
         raise ValueError("indicators must not be empty")
+
+    bp = params if params is not None else BacktestParams()
 
     account = BacktestAccount(starting_capital)
     trades: list[Trade] = []
@@ -601,21 +624,21 @@ def run_backtest(
                     num_open_positions=0,
                 )
                 if size > 0:
-                    sl = compute_stop_loss(
-                        pending.buy_stop,
-                        pending.signal_atr,
+                    fill_price = pending.buy_stop + bp.fill_price_offset * (
+                        pending.limit - pending.buy_stop
                     )
-                    tp = compute_take_profit(
-                        pending.buy_stop,
-                        pending.signal_atr,
-                        pending.signal_adx,
+                    sl = fill_price - bp.atr_multiplier * pending.signal_atr
+                    tp_mult = max(
+                        bp.tp_clamp_min,
+                        min(bp.tp_clamp_max, 2.0 + pending.signal_adx / 30.0),
                     )
-                    notional = size * pending.buy_stop
+                    tp = fill_price + tp_mult * pending.signal_atr
+                    notional = size * fill_price
                     entry_cost = cost_per_side * size
                     account.open_position(notional, entry_cost)
                     entry_date: datetime.date = _to_date(date)
                     position = _ActivePosition(
-                        entry_price=pending.buy_stop,
+                        entry_price=fill_price,
                         entry_date=entry_date,
                         size=size,
                         original_size=size,
@@ -690,7 +713,7 @@ def run_backtest(
 
                 # Update trailing stop (only meaningful when tp_50_hit)
                 if position.tp_50_hit:
-                    new_trail = position.highest_high - 2 * position.signal_atr
+                    new_trail = position.highest_high - bp.atr_multiplier * position.signal_atr
                     position.trailing_stop = max(
                         position.trailing_stop,
                         new_trail,
@@ -721,8 +744,8 @@ def run_backtest(
 
         # -- Phase 4: New signal ---------------------------------------
         if position is None and pending is None and account.throttle_state != ThrottleState.HALTED:
-            sig_str = str(row["signal"])
-            if sig_str in (Signal.BUY.value, Signal.STRONG_BUY.value):
+            composite_val = float(row["composite"])
+            if not math.isnan(composite_val) and composite_val > bp.composite_buy_threshold:
                 eurusd_row = eurusd.loc[date] if date in eurusd.index else None
 
                 guard_kwargs: dict[str, object] = {

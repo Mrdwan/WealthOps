@@ -29,6 +29,10 @@ def _build_scenario(
 ) -> BacktestResult:
     """Run backtest on synthetic data with per-index overrides.
 
+    When ``signal`` is overridden but ``composite`` is not, positions with
+    signal ``"BUY"`` or ``"STRONG_BUY"`` automatically receive composite=2.0
+    so the composite-threshold signal check fires correctly.
+
     Args:
         n: Number of business days.
         overrides: Column name -> list of (index, value) style values.
@@ -56,10 +60,17 @@ def _build_scenario(
         "composite": [0.0] * n,
         "signal": ["NEUTRAL"] * n,
     }
+    has_signal_override = overrides is not None and "signal" in overrides
+    has_composite_override = overrides is not None and "composite" in overrides
     if overrides:
         for key, vals in overrides.items():
             for i, val in enumerate(vals):
                 defaults[key][i] = val
+    # Derive composite from signal when composite was not explicitly provided.
+    if has_signal_override and not has_composite_override:
+        for i, sig in enumerate(defaults["signal"]):
+            if sig in ("BUY", "STRONG_BUY"):
+                defaults["composite"][i] = 2.0
 
     indicators = pd.DataFrame(defaults, index=dates)
     eurusd = pd.DataFrame({"close": [1.10] * n, "sma_200": [1.08] * n}, index=dates)
