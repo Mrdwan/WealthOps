@@ -10,8 +10,10 @@ from trading_advisor.backtest.validation import (
     WalkForwardResult,
     WalkForwardWindow,
     _run_window_backtest,
+    compute_t_statistic,
     compute_wfe,
     generate_walk_forward_windows,
+    run_monte_carlo,
     run_walk_forward,
 )
 
@@ -347,3 +349,121 @@ class TestWalkForwardResult:
         )
         with pytest.raises(AttributeError):
             r.wfe = 1.0  # type: ignore[misc]
+
+
+# ------------------------------------------------------------------
+# Tests: run_monte_carlo
+# ------------------------------------------------------------------
+
+
+class TestMonteCarlo:
+    """Tests for Monte Carlo bootstrap."""
+
+    def test_all_positive_pnls(self) -> None:
+        """All positive trades -> 5th percentile > starting capital -> passed."""
+        pnls = [100.0, 200.0, 150.0, 50.0, 300.0]
+        result = run_monte_carlo(pnls, starting_capital=15000.0, n_resamples=1000, seed=42)
+
+        assert result.passed is True
+        assert result.percentile_5 > 15000.0
+        assert result.n_resamples == 1000
+        assert result.starting_capital == 15000.0
+        assert len(result.terminal_equities) == 1000
+        # Terminal equities should be sorted
+        for i in range(len(result.terminal_equities) - 1):
+            assert result.terminal_equities[i] <= result.terminal_equities[i + 1]
+
+    def test_all_negative_pnls(self) -> None:
+        """All negative trades -> 5th percentile < starting capital -> not passed."""
+        pnls = [-100.0, -200.0, -150.0, -50.0, -300.0]
+        result = run_monte_carlo(pnls, starting_capital=15000.0, n_resamples=1000, seed=42)
+
+        assert result.passed is False
+        assert result.percentile_5 < 15000.0
+
+    def test_deterministic_with_seed(self) -> None:
+        """Same seed produces same result."""
+        pnls = [100.0, -50.0, 200.0, -30.0, 150.0]
+        r1 = run_monte_carlo(pnls, starting_capital=15000.0, n_resamples=100, seed=123)
+        r2 = run_monte_carlo(pnls, starting_capital=15000.0, n_resamples=100, seed=123)
+        assert r1.percentile_5 == r2.percentile_5
+        assert r1.terminal_equities == r2.terminal_equities
+
+    def test_single_trade(self) -> None:
+        """Single positive trade resampled -> always same terminal equity."""
+        pnls = [500.0]
+        result = run_monte_carlo(pnls, starting_capital=10000.0, n_resamples=100, seed=42)
+        # Every resample draws the same single trade
+        assert result.percentile_5 == pytest.approx(10500.0)
+        assert all(eq == pytest.approx(10500.0) for eq in result.terminal_equities)
+
+    def test_empty_pnls_raises(self) -> None:
+        """Empty trade list raises ValueError."""
+        with pytest.raises(ValueError, match="empty"):
+            run_monte_carlo([], starting_capital=15000.0)
+
+    def test_result_is_frozen(self) -> None:
+        """MonteCarloResult is immutable."""
+        result = run_monte_carlo([100.0], starting_capital=15000.0, n_resamples=10, seed=1)
+        with pytest.raises(AttributeError):
+            result.passed = False  # type: ignore[misc]
+
+    def test_zero_pnl_not_passed(self) -> None:
+        """Zero P&L -> percentile_5 == starting_capital -> NOT passed (strict >)."""
+        result = run_monte_carlo([0.0], starting_capital=15000.0, n_resamples=100, seed=42)
+        assert result.percentile_5 == pytest.approx(15000.0)
+        assert result.passed is False
+
+    def test_percentile_5_position(self) -> None:
+        """5th percentile is at the correct position in sorted results."""
+        pnls = [100.0, -50.0, 200.0, -30.0, 150.0, -100.0, 80.0]
+        result = run_monte_carlo(pnls, starting_capital=15000.0, n_resamples=10000, seed=42)
+        # 5th percentile: approximately the 500th value in sorted 10000 results
+        idx = int(0.05 * len(result.terminal_equities))
+        # The percentile should be near this index value
+        assert abs(result.percentile_5 - result.terminal_equities[idx]) < 50.0
+
+
+# ------------------------------------------------------------------
+# Tests: compute_t_statistic
+# ------------------------------------------------------------------
+
+
+class TestTStatistic:
+    """Tests for t-statistic computation."""
+
+    def test_known_values(self) -> None:
+        """Known P&Ls: [100, 200, 300, 400, 500].
+
+        mean = 300, std = sqrt(25000) = 158.1139..., N = 5
+        t = 300 * sqrt(5) / 158.1139 = 300 * 2.2360679 / 158.1139 = 4.2426...
+        """
+        pnls = [100.0, 200.0, 300.0, 400.0, 500.0]
+        t = compute_t_statistic(pnls)
+        # mean=300, std(ddof=1)=sqrt(25000)≈158.114
+        # t = 300 * sqrt(5) / 158.114 ≈ 4.2426
+        assert t == pytest.approx(4.2426, rel=1e-3)
+
+    def test_zero_mean(self) -> None:
+        """Symmetric P&Ls: mean = 0 -> t = 0."""
+        pnls = [100.0, -100.0, 50.0, -50.0]
+        t = compute_t_statistic(pnls)
+        assert t == pytest.approx(0.0)
+
+    def test_single_trade_returns_zero(self) -> None:
+        """Fewer than 2 trades -> t = 0.0."""
+        assert compute_t_statistic([100.0]) == 0.0
+
+    def test_empty_returns_zero(self) -> None:
+        """Empty list -> t = 0.0."""
+        assert compute_t_statistic([]) == 0.0
+
+    def test_constant_pnls_returns_zero(self) -> None:
+        """All identical P&Ls -> std = 0 -> t = 0.0."""
+        assert compute_t_statistic([100.0, 100.0, 100.0]) == 0.0
+
+    def test_large_positive_t(self) -> None:
+        """All large positive P&Ls with small variance -> high t."""
+        pnls = [1000.0, 1001.0, 999.0, 1000.5, 999.5]
+        t = compute_t_statistic(pnls)
+        assert t > 100.0  # Very high t due to tiny variance relative to mean

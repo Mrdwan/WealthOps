@@ -5,9 +5,11 @@ WFE = mean(OOS Sharpe) / mean(in-sample Sharpe). Pass > 50%.
 """
 
 import datetime
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from trading_advisor.backtest.engine import BacktestParams, run_backtest
@@ -270,3 +272,101 @@ def run_walk_forward(
         oos_sharpes=tuple(oos_sharpes),
         wfe=wfe,
     )
+
+
+@dataclass(frozen=True)
+class MonteCarloResult:
+    """Result of a Monte Carlo bootstrap simulation.
+
+    Attributes:
+        terminal_equities: Sorted tuple of terminal equity values from resamples.
+        percentile_5: 5th percentile of terminal equity distribution.
+        starting_capital: The starting capital used.
+        n_resamples: Number of resamples performed.
+        passed: True if 5th percentile > starting capital.
+    """
+
+    terminal_equities: tuple[float, ...]
+    percentile_5: float
+    starting_capital: float
+    n_resamples: int
+    passed: bool
+
+
+def run_monte_carlo(
+    trade_pnls: Sequence[float],
+    starting_capital: float,
+    n_resamples: int = 10000,
+    seed: int | None = None,
+) -> MonteCarloResult:
+    """Run Monte Carlo bootstrap on trade P&Ls.
+
+    Resamples trade P&Ls with replacement, accumulates them to build
+    simulated equity paths, and reports the terminal equity distribution.
+
+    Algorithm:
+        For each resample:
+            1. Draw len(trade_pnls) P&Ls with replacement
+            2. Terminal equity = starting_capital + sum(drawn P&Ls)
+        Sort terminal equities, compute 5th percentile.
+
+    Args:
+        trade_pnls: Sequence of trade P&L values from the backtest.
+        starting_capital: Initial capital.
+        n_resamples: Number of resamples (default 10,000).
+        seed: Optional RNG seed for reproducibility.
+
+    Returns:
+        MonteCarloResult with distribution and pass/fail.
+
+    Raises:
+        ValueError: If trade_pnls is empty.
+    """
+    if not trade_pnls:
+        raise ValueError("trade_pnls is empty; cannot run Monte Carlo bootstrap")
+
+    pnls_array = np.array(trade_pnls, dtype=float)
+    n_trades = len(pnls_array)
+
+    rng = np.random.default_rng(seed)
+    draws = rng.choice(pnls_array, size=(n_resamples, n_trades), replace=True)
+    row_sums = draws.sum(axis=1)
+    equities = starting_capital + row_sums
+
+    sorted_equities = np.sort(equities)
+    percentile_5 = float(np.percentile(sorted_equities, 5))
+    passed = percentile_5 > starting_capital
+
+    return MonteCarloResult(
+        terminal_equities=tuple(float(v) for v in sorted_equities),
+        percentile_5=percentile_5,
+        starting_capital=starting_capital,
+        n_resamples=n_resamples,
+        passed=passed,
+    )
+
+
+def compute_t_statistic(trade_pnls: Sequence[float]) -> float:
+    """Compute the t-statistic of trade returns.
+
+    Formula: t = mean(pnls) * sqrt(N) / std(pnls)
+    Tests whether the mean trade return is significantly different from zero.
+    Pass threshold: t > 2.0.
+
+    Args:
+        trade_pnls: Sequence of trade P&L values.
+
+    Returns:
+        t-statistic value. Returns 0.0 if fewer than 2 trades or zero std.
+    """
+    if len(trade_pnls) < 2:
+        return 0.0
+
+    pnls_array = np.array(trade_pnls, dtype=float)
+    mean = float(np.mean(pnls_array))
+    std = float(np.std(pnls_array, ddof=1))
+
+    if std == 0.0:
+        return 0.0
+
+    return mean * math.sqrt(len(trade_pnls)) / std
