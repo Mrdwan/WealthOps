@@ -300,9 +300,9 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 ## Current Status
 
-**Active task:** Task 1D (Signal Generation)
+**Active task:** Task 1E (Backtest Engine)
 **Blockers:** None
-**Last updated:** 2026-03-24
+**Last updated:** 2026-03-25
 
 ---
 
@@ -531,37 +531,37 @@ Everything depends on these. Build before any feature work.
 
 ### Task 1D: Signal Generation
 
-- [ ] **1D.1 — Signal dataclass**
+- [x] **1D.1 — Signal dataclass**
   - Frozen dataclass: date, asset, direction, composite_score, signal_strength, trap_order_stop, trap_order_limit, stop_loss, take_profit, trailing_stop_atr_mult, position_size, risk_amount, risk_reward_ratio, guards_passed, ttl
   - Unit tests: construction, field validation
 
-- [ ] **1D.2 — Trap Order calculation**
+- [x] **1D.2 — Trap Order calculation**
   - `buy_stop = signal_day_high + (0.02 × ATR_14)`
   - `limit = buy_stop + (0.05 × ATR_14)`
   - Uses signal day's candle and ATR
   - Unit tests: known candle + ATR → exact prices
 
-- [ ] **1D.3 — Stop loss + take profit**
+- [x] **1D.3 — Stop loss + take profit**
   - SL: `entry - (2 × signal_day_ATR_14)` — fixed at entry
   - TP: `clamp(2 + signal_day_ADX/30, 2.5, 4.5) × signal_day_ATR_14` above entry — fixed at entry
   - Unit tests: low ADX → 2.5x, mid → scaled, high → 4.5x
 
-- [ ] **1D.4 — Position sizing (dual-constraint + throttle + cash reserve)**
+- [x] **1D.4 — Position sizing (dual-constraint + throttle + cash reserve)**
   - ATR-based: `(equity × risk_pct) / (ATR_14 × 2)`
   - Cap-based: `(equity × 0.15) / entry_price`
   - `size = min(atr, cap)`. Apply throttle: halve if THROTTLED_50 or THROTTLED_MAX1. Check cash reserve. Round down to 0.01.
   - Unit tests: each tier, each constraint binding, throttle halving at both levels, cash reserve reduction
 
-- [ ] **1D.5 — Partial position rule**
+- [x] **1D.5 — Partial position rule**
   - If any position open (full or trailing 50%), block new signals
   - Unit tests: no position → allow, position open → block
 
-- [ ] **1D.6 — Signal generation pipeline**
+- [x] **1D.6 — Signal generation pipeline**
   - Composite → threshold → guards → trap order → sizing → Signal object
   - Only BUY/STRONG_BUY proceed. Guard fail → no signal. Partial rule → no signal.
   - Unit tests: below threshold → no signal, guard fail → no signal, all pass → valid Signal
 
-- [ ] **1D.7 — Historical signal scan**
+- [x] **1D.7 — Historical signal scan**
   - Run pipeline across full history, output all signals as parquet
   - Diagnostic tool for spot-checking, not the backtest
   - Verify no future data leakage
