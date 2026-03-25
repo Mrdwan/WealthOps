@@ -15,6 +15,8 @@ import pandas as pd
 from trading_advisor.backtest.engine import BacktestParams, run_backtest
 from trading_advisor.backtest.report import compute_metrics
 from trading_advisor.guards.base import Guard
+from trading_advisor.indicators.composite import compute_composite
+from trading_advisor.indicators.technical import compute_all_indicators, compute_sma
 
 
 @dataclass(frozen=True)
@@ -370,3 +372,141 @@ def compute_t_statistic(trade_pnls: Sequence[float]) -> float:
         return 0.0
 
     return mean * math.sqrt(len(trade_pnls)) / std
+
+
+@dataclass(frozen=True)
+class ShuffledPriceResult:
+    """Result of a shuffled-price statistical test.
+
+    Attributes:
+        real_sharpe: Sharpe ratio of the actual strategy.
+        shuffled_sharpes: Sorted tuple of Sharpe ratios from shuffled runs.
+        p_value: Fraction of shuffled Sharpes >= real Sharpe.
+        n_shuffles: Number of shuffle iterations performed.
+        passed: True if p_value < 0.01.
+    """
+
+    real_sharpe: float
+    shuffled_sharpes: tuple[float, ...]
+    p_value: float
+    n_shuffles: int
+    passed: bool
+
+
+def run_shuffled_price_test(
+    ohlcv: pd.DataFrame,
+    eurusd: pd.DataFrame,
+    guards: Sequence[Guard],
+    guards_enabled: dict[str, bool],
+    fedfunds: "pd.Series[float]",
+    real_sharpe: float,
+    n_shuffles: int = 1000,
+    starting_capital: float = 15000.0,
+    params: BacktestParams | None = None,
+    seed: int | None = None,
+) -> ShuffledPriceResult:
+    """Run a shuffled-price statistical test.
+
+    Permutes daily log returns, reconstructs synthetic price series,
+    recomputes indicators and composite, runs the backtest, and checks
+    whether the real strategy's Sharpe ratio is significantly better
+    than random (p < 0.01).
+
+    Args:
+        ohlcv: DataFrame with open, high, low, close columns and DatetimeIndex.
+        eurusd: DataFrame with close column for EUR/USD exchange rate.
+        guards: Guard instances.
+        guards_enabled: Guard enable flags.
+        fedfunds: FEDFUNDS rate series.
+        real_sharpe: Sharpe ratio of the actual (non-shuffled) strategy.
+        n_shuffles: Number of shuffle iterations (default 1000).
+        starting_capital: Initial capital for each backtest run.
+        params: Optional BacktestParams overrides.
+        seed: Optional RNG seed for reproducibility.
+
+    Returns:
+        ShuffledPriceResult with distribution and pass/fail.
+    """
+    close = ohlcv["close"]
+    log_ratio: pd.Series[float] = close / close.shift(1)
+    log_returns: pd.Series[float] = pd.Series(
+        np.log(log_ratio.values), index=log_ratio.index
+    ).dropna()
+
+    # Prepare eurusd for backtest: needs close and sma_200 columns
+    if "sma_200" in eurusd.columns:
+        eurusd_bt = eurusd
+    else:
+        eurusd_bt = eurusd.copy()
+        eurusd_bt["sma_200"] = compute_sma(eurusd["close"], window=200)
+
+    rng = np.random.default_rng(seed)
+    shuffled_sharpes: list[float] = []
+
+    original_close = ohlcv["close"]
+    original_open = ohlcv["open"]
+    original_high = ohlcv["high"]
+    original_low = ohlcv["low"]
+
+    for _ in range(n_shuffles):
+        try:
+            # Permute log returns
+            returns_array = np.array(log_returns.values, dtype=np.float64)
+            shuffled_returns = rng.permutation(returns_array)
+
+            # Reconstruct synthetic close series
+            # Start from the original first close, apply cumulative shuffled returns
+            synthetic_close_values = np.empty(len(ohlcv), dtype=np.float64)
+            synthetic_close_values[0] = float(close.iloc[0])
+            synthetic_close_values[1:] = float(close.iloc[0]) * np.exp(np.cumsum(shuffled_returns))
+
+            synthetic_close = pd.Series(synthetic_close_values, index=ohlcv.index, dtype=np.float64)
+
+            # Scale OHLC proportionally
+            ratio = synthetic_close / original_close
+
+            synthetic_ohlcv = pd.DataFrame(
+                {
+                    "open": original_open * ratio,
+                    "high": original_high * ratio,
+                    "low": original_low * ratio,
+                    "close": synthetic_close,
+                },
+                index=ohlcv.index,
+            )
+
+            # Compute indicators and composite
+            indicators_df = compute_all_indicators(synthetic_ohlcv, eurusd)
+            composite_df = compute_composite(indicators_df)
+
+            # Run backtest
+            result = run_backtest(
+                indicators=composite_df,
+                eurusd=eurusd_bt,
+                guards=guards,
+                guards_enabled=guards_enabled,
+                fedfunds=fedfunds,
+                starting_capital=starting_capital,
+                params=params,
+            )
+
+            # Compute metrics and extract Sharpe
+            metrics = compute_metrics(result, fedfunds)
+            shuffled_sharpes.append(metrics["sharpe_ratio"])
+        except Exception:  # noqa: BLE001
+            shuffled_sharpes.append(0.0)
+
+    # Compute p-value
+    p_value = sum(1 for s in shuffled_sharpes if s >= real_sharpe) / n_shuffles
+
+    # Sort shuffled sharpes
+    sorted_sharpes = sorted(shuffled_sharpes)
+    passed = p_value < 0.01
+
+    return ShuffledPriceResult(
+        real_sharpe=real_sharpe,
+        shuffled_sharpes=tuple(sorted_sharpes),
+        p_value=p_value,
+        n_shuffles=n_shuffles,
+        passed=passed,
+    )

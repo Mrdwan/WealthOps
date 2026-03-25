@@ -3,10 +3,13 @@
 import datetime
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pytest
+import pytest_mock
 
 from trading_advisor.backtest.validation import (
+    ShuffledPriceResult,
     WalkForwardResult,
     WalkForwardWindow,
     _run_window_backtest,
@@ -14,6 +17,7 @@ from trading_advisor.backtest.validation import (
     compute_wfe,
     generate_walk_forward_windows,
     run_monte_carlo,
+    run_shuffled_price_test,
     run_walk_forward,
 )
 
@@ -467,3 +471,221 @@ class TestTStatistic:
         pnls = [1000.0, 1001.0, 999.0, 1000.5, 999.5]
         t = compute_t_statistic(pnls)
         assert t > 100.0  # Very high t due to tiny variance relative to mean
+
+
+# ------------------------------------------------------------------
+# Tests: run_shuffled_price_test
+# ------------------------------------------------------------------
+
+
+class TestShuffledPriceTest:
+    """Tests for shuffled-price statistical test."""
+
+    def _make_ohlcv(self, n: int, start: str = "2018-01-01") -> pd.DataFrame:
+        """Build n rows of OHLCV with a slight uptrend for testing."""
+        dates = pd.bdate_range(start, periods=n, freq="B")
+        rng = np.random.default_rng(42)
+        close = 2000.0 + np.cumsum(rng.normal(0.5, 5.0, n))
+        return pd.DataFrame(
+            {
+                "open": close - rng.uniform(0, 5, n),
+                "high": close + rng.uniform(0, 10, n),
+                "low": close - rng.uniform(0, 10, n),
+                "close": close,
+            },
+            index=dates,
+        )
+
+    def _make_eurusd(self, n: int, start: str = "2018-01-01") -> pd.DataFrame:
+        """Build n rows of EUR/USD data."""
+        dates = pd.bdate_range(start, periods=n, freq="B")
+        return pd.DataFrame({"close": [1.10] * n}, index=dates)
+
+    def test_returns_result(self) -> None:
+        """Shuffled-price test returns ShuffledPriceResult."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        eurusd = self._make_eurusd(n)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        result = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=1.5,
+            n_shuffles=5,
+            seed=42,
+        )
+
+        assert isinstance(result, ShuffledPriceResult)
+        assert result.n_shuffles == 5
+        assert result.real_sharpe == 1.5
+        assert len(result.shuffled_sharpes) == 5
+        assert 0.0 <= result.p_value <= 1.0
+
+    def test_shuffled_sharpes_sorted(self) -> None:
+        """Shuffled Sharpes should be sorted."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        eurusd = self._make_eurusd(n)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        result = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=0.0,
+            n_shuffles=5,
+            seed=42,
+        )
+        for i in range(len(result.shuffled_sharpes) - 1):
+            assert result.shuffled_sharpes[i] <= result.shuffled_sharpes[i + 1]
+
+    def test_deterministic_with_seed(self) -> None:
+        """Same seed produces same result."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        eurusd = self._make_eurusd(n)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        r1 = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=0.5,
+            n_shuffles=3,
+            seed=123,
+        )
+        r2 = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=0.5,
+            n_shuffles=3,
+            seed=123,
+        )
+        assert r1.shuffled_sharpes == r2.shuffled_sharpes
+        assert r1.p_value == r2.p_value
+
+    def test_high_real_sharpe_low_p_value(self) -> None:
+        """Very high real_sharpe -> all shuffled below -> p_value = 0.0 -> passed."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        eurusd = self._make_eurusd(n)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        result = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=100.0,
+            n_shuffles=5,
+            seed=42,
+        )
+        # With real_sharpe=100, no shuffled run should beat it
+        assert result.p_value == 0.0
+        assert result.passed is True
+
+    def test_low_real_sharpe_high_p_value(self) -> None:
+        """Very low real_sharpe -> most shuffled above -> high p_value -> not passed."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        eurusd = self._make_eurusd(n)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        result = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=-100.0,
+            n_shuffles=5,
+            seed=42,
+        )
+        # With real_sharpe=-100, all shuffled should beat it
+        assert result.p_value == pytest.approx(1.0)
+        assert result.passed is False
+
+    def test_result_is_frozen(self) -> None:
+        """ShuffledPriceResult is immutable."""
+        r = ShuffledPriceResult(
+            real_sharpe=1.0,
+            shuffled_sharpes=(0.5,),
+            p_value=0.0,
+            n_shuffles=1,
+            passed=True,
+        )
+        with pytest.raises(AttributeError):
+            r.passed = False  # type: ignore[misc]
+
+    def test_p_value_boundary(self) -> None:
+        """p_value exactly 0.01 is NOT passed (strict <)."""
+        # Construct result manually to test boundary
+        r = ShuffledPriceResult(
+            real_sharpe=1.0,
+            shuffled_sharpes=(0.5,),
+            p_value=0.01,
+            n_shuffles=100,
+            passed=False,  # 0.01 is NOT < 0.01
+        )
+        assert r.passed is False
+
+    def test_eurusd_with_sma_200_already_present(self) -> None:
+        """When eurusd already has sma_200, it is used directly."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        dates = pd.bdate_range("2018-01-01", periods=n, freq="B")
+        eurusd = pd.DataFrame({"close": [1.10] * n, "sma_200": [1.08] * n}, index=dates)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        result = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=1.5,
+            n_shuffles=2,
+            seed=42,
+        )
+        assert isinstance(result, ShuffledPriceResult)
+        assert len(result.shuffled_sharpes) == 2
+
+    def test_exception_in_indicator_computation(
+        self,
+        mocker: "pytest_mock.MockerFixture",
+    ) -> None:
+        """When compute_all_indicators raises, Sharpe 0.0 is recorded."""
+        n = 500
+        ohlcv = self._make_ohlcv(n)
+        eurusd = self._make_eurusd(n)
+        fedfunds: pd.Series[float] = pd.Series([], dtype=float)
+
+        mocker.patch(
+            "trading_advisor.backtest.validation.compute_all_indicators",
+            side_effect=RuntimeError("degenerate series"),
+        )
+
+        result = run_shuffled_price_test(
+            ohlcv=ohlcv,
+            eurusd=eurusd,
+            guards=[],
+            guards_enabled={},
+            fedfunds=fedfunds,
+            real_sharpe=1.0,
+            n_shuffles=3,
+            seed=42,
+        )
+        # All shuffled sharpes should be 0.0 because every iteration raised
+        assert result.shuffled_sharpes == (0.0, 0.0, 0.0)
