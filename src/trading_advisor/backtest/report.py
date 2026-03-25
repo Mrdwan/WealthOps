@@ -1,11 +1,13 @@
 """Backtest report: performance metrics, equity curve charts, monthly heatmap.
 
 compute_metrics: Sharpe, Sortino, Profit Factor, Max Drawdown, Win Rate, etc.
-generate_report: Plotly HTML (Task 6, not implemented yet).
+generate_report: Plotly HTML with equity curve, drawdown, monthly returns heatmap,
+    metrics summary table, and trade log.
 """
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 
 from trading_advisor.backtest.engine import BacktestResult
 
@@ -157,3 +159,314 @@ def compute_metrics(
         "sharpe_ratio": sharpe_ratio,
         "sortino_ratio": sortino_ratio,
     }
+
+
+# ------------------------------------------------------------------
+# HTML report
+# ------------------------------------------------------------------
+
+
+def _build_metrics_table(metrics: dict[str, float]) -> str:
+    """Build an HTML table of metric name/value pairs.
+
+    Args:
+        metrics: Mapping of metric name to float value.
+
+    Returns:
+        HTML string for a two-column table.
+    """
+    rows: list[str] = []
+    for name, value in metrics.items():
+        formatted = f"{value:.2f}"
+        rows.append(f"<tr><td>{name}</td><td>{formatted}</td></tr>")
+    body = "\n".join(rows)
+    return (
+        "<table>\n"
+        "<thead><tr><th>Metric</th><th>Value</th></tr></thead>\n"
+        f"<tbody>{body}</tbody>\n"
+        "</table>"
+    )
+
+
+def _build_trade_log_table(result: BacktestResult) -> str:
+    """Build an HTML table listing all completed trades.
+
+    Args:
+        result: The BacktestResult containing the trade list.
+
+    Returns:
+        HTML string for the trade log table, or a "No trades" message when empty.
+    """
+    if not result.trades:
+        return "<p>No trades</p>"
+
+    headers = [
+        "Entry Date",
+        "Exit Date",
+        "Entry Price",
+        "Exit Price",
+        "Size",
+        "Direction",
+        "P&amp;L",
+        "Exit Reason",
+        "Days Held",
+        "Costs",
+    ]
+    header_row = "".join(f"<th>{h}</th>" for h in headers)
+    rows: list[str] = []
+    for t in result.trades:
+        total_costs = t.spread_cost + t.slippage_cost + t.funding_cost
+        pnl_class = "positive" if t.pnl >= 0 else "negative"
+        cells = [
+            f"<td>{t.entry_date}</td>",
+            f"<td>{t.exit_date}</td>",
+            f"<td>{t.entry_price:.2f}</td>",
+            f"<td>{t.exit_price:.2f}</td>",
+            f"<td>{t.size:.2f}</td>",
+            f"<td>{t.direction}</td>",
+            f'<td class="{pnl_class}">{t.pnl:.2f}</td>',
+            f"<td>{t.exit_reason.value}</td>",
+            f"<td>{t.days_held}</td>",
+            f"<td>{total_costs:.2f}</td>",
+        ]
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+
+    body = "\n".join(rows)
+    return (
+        "<table>\n" f"<thead><tr>{header_row}</tr></thead>\n" f"<tbody>{body}</tbody>\n" "</table>"
+    )
+
+
+def _build_equity_chart(result: BacktestResult) -> str:
+    """Build a Plotly equity curve chart as an HTML div string.
+
+    Args:
+        result: The BacktestResult containing the equity curve.
+
+    Returns:
+        HTML div string for the equity curve chart.
+    """
+    equity_curve = result.equity_curve
+    if equity_curve.empty:
+        dates: list[object] = []
+        equity_vals: list[float] = []
+    else:
+        dates = list(equity_curve.index)
+        equity_vals = list(equity_curve["equity"].astype(float))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=dates,
+            y=equity_vals,
+            mode="lines",
+            line={"color": "#00ff88"},
+            name="Equity",
+        )
+    )
+    fig.update_layout(
+        title="Equity Curve",
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#16213e",
+        font={"color": "#e0e0e0"},
+        xaxis={"gridcolor": "#333"},
+        yaxis={"gridcolor": "#333"},
+    )
+    return str(fig.to_html(include_plotlyjs="cdn", full_html=False))
+
+
+def _build_drawdown_chart(result: BacktestResult) -> str:
+    """Build a Plotly drawdown chart as an HTML div string.
+
+    The drawdown is displayed inverted (negative values below zero) with a
+    red fill to emphasise underwater periods.
+
+    Args:
+        result: The BacktestResult containing the equity curve.
+
+    Returns:
+        HTML div string for the drawdown chart.
+    """
+    equity_curve = result.equity_curve
+    if equity_curve.empty:
+        dates: list[object] = []
+        dd_vals: list[float] = []
+    else:
+        dates = list(equity_curve.index)
+        dd_vals = [-float(v) for v in equity_curve["drawdown_pct"]]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=dates,
+            y=dd_vals,
+            mode="lines",
+            fill="tozeroy",
+            line={"color": "#ff4444"},
+            fillcolor="rgba(255,68,68,0.3)",
+            name="Drawdown",
+        )
+    )
+    fig.update_layout(
+        title="Drawdown",
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#16213e",
+        font={"color": "#e0e0e0"},
+        xaxis={"gridcolor": "#333"},
+        yaxis={"gridcolor": "#333"},
+    )
+    return str(fig.to_html(include_plotlyjs=False, full_html=False))
+
+
+def _build_monthly_heatmap(result: BacktestResult) -> str:
+    """Build a Plotly monthly returns heatmap as an HTML div string.
+
+    Rows are years, columns are months (Jan–Dec). Each cell shows the
+    monthly return as a percentage. Green = positive, red = negative.
+
+    Args:
+        result: The BacktestResult containing the equity curve.
+
+    Returns:
+        HTML div string for the monthly returns heatmap.
+    """
+    equity_curve = result.equity_curve
+    if equity_curve.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title="Monthly Returns",
+            paper_bgcolor="#1a1a2e",
+            plot_bgcolor="#16213e",
+            font={"color": "#e0e0e0"},
+        )
+        return str(fig.to_html(include_plotlyjs=False, full_html=False))
+
+    equity_series: pd.Series[float] = equity_curve["equity"].astype(float)
+    # Resample to last value per calendar month
+    monthly: pd.Series[float] = equity_series.resample("ME").last()
+    monthly_returns: pd.Series[float] = monthly.pct_change() * 100.0
+
+    # Build a pivot: rows = years, cols = month numbers 1..12
+    monthly_dt_index = pd.DatetimeIndex(monthly_returns.index)
+    df = pd.DataFrame(
+        {
+            "year": monthly_dt_index.year,
+            "month": monthly_dt_index.month,
+            "return": monthly_returns.values,
+        }
+    )
+    pivot = df.pivot(index="year", columns="month", values="return")
+    # Ensure all 12 months are present as columns
+    for m in range(1, 13):
+        if m not in pivot.columns:
+            pivot[m] = float("nan")
+    pivot = pivot[[m for m in range(1, 13)]]
+
+    month_labels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+    year_labels = [str(y) for y in pivot.index]
+    z_values = pivot.values.tolist()
+
+    # Build text annotations showing percentage values
+    text_values = [[f"{v:.1f}%" if not np.isnan(v) else "" for v in row] for row in z_values]
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=z_values,
+            x=month_labels,
+            y=year_labels,
+            text=text_values,
+            texttemplate="%{text}",
+            colorscale=[
+                [0.0, "#ff4444"],
+                [0.5, "#333333"],
+                [1.0, "#00ff88"],
+            ],
+            zmid=0.0,
+            showscale=True,
+        )
+    )
+    fig.update_layout(
+        title="Monthly Returns",
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#16213e",
+        font={"color": "#e0e0e0"},
+    )
+    return str(fig.to_html(include_plotlyjs=False, full_html=False))
+
+
+def generate_report(
+    result: BacktestResult,
+    metrics: dict[str, float],
+) -> str:
+    """Generate a self-contained HTML report with charts and tables.
+
+    Sections:
+      1. Metrics summary table
+      2. Equity curve line chart
+      3. Drawdown area chart (inverted, red fill)
+      4. Monthly returns heatmap (years x months, green/red)
+      5. Trade log table
+
+    Args:
+        result: The BacktestResult from run_backtest.
+        metrics: Metrics dictionary from compute_metrics.
+
+    Returns:
+        Self-contained HTML string.
+    """
+    metrics_table = _build_metrics_table(metrics)
+    equity_chart = _build_equity_chart(result)
+    drawdown_chart = _build_drawdown_chart(result)
+    monthly_heatmap = _build_monthly_heatmap(result)
+    trade_log = _build_trade_log_table(result)
+
+    html = (
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head>\n"
+        "    <title>Backtest Report</title>\n"
+        "    <style>\n"
+        "        body { font-family: Arial, sans-serif; margin: 20px;"
+        " background: #1a1a2e; color: #e0e0e0; }\n"
+        "        table { border-collapse: collapse; width: 100%; margin: 20px 0; }\n"
+        "        th, td { border: 1px solid #333; padding: 8px; text-align: right; }\n"
+        "        th { background: #16213e; }\n"
+        "        h1, h2 { color: #e0e0e0; }\n"
+        "        .positive { color: #00ff88; }\n"
+        "        .negative { color: #ff4444; }\n"
+        "    </style>\n"
+        "</head>\n"
+        "<body>\n"
+        "    <h1>Backtest Report</h1>\n"
+        "\n"
+        "    <h2>Metrics Summary</h2>\n"
+        f"    {metrics_table}\n"
+        "\n"
+        "    <h2>Equity Curve</h2>\n"
+        f"    {equity_chart}\n"
+        "\n"
+        "    <h2>Drawdown</h2>\n"
+        f"    {drawdown_chart}\n"
+        "\n"
+        "    <h2>Monthly Returns</h2>\n"
+        f"    {monthly_heatmap}\n"
+        "\n"
+        "    <h2>Trade Log</h2>\n"
+        f"    {trade_log}\n"
+        "</body>\n"
+        "</html>"
+    )
+    return html
