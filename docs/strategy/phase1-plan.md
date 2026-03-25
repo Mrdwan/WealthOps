@@ -572,66 +572,66 @@ Everything depends on these. Build before any feature work.
 
 #### Foundation
 
-- [ ] **1E.1 — Pseudocode first**
+- [x] **1E.1 — Pseudocode first**
   - Write day-by-day loop in pseudocode before implementing
   - Cover: signal → trap order → fill → exits → costs → equity → drawdown → throttle
 
-- [ ] **1E.2 — Backtest dataclasses**
+- [x] **1E.2 — Backtest dataclasses**
   - `Trade`: entry/exit dates, prices, direction, size, pnl, exit_reason, days_held, costs
   - `BacktestResult`: equity_curve (DataFrame), trade_log (list[Trade]), metrics (dict)
   - Unit tests: construction
 
-- [ ] **1E.3 — Account model**
+- [x] **1E.3 — Account model**
   - €15,000 start, no additions. Track: cash, equity, high_water_mark, drawdown_pct, throttle_state
   - In-memory (reset per run, not persisted)
   - Unit tests: initial state, cash after open, equity with unrealized P&L
 
 #### Execution Logic
 
-- [ ] **1E.4 — Trap Order fill logic**
+- [x] **1E.4 — Trap Order fill logic**
   - `next_day_high >= buy_stop AND next_day_low <= limit` → filled at buy_stop
   - No fill → order expires. Gap-throughs rejected naturally by fill condition.
   - Unit tests: clean fill, high misses stop → no fill, low misses limit → no fill, gap-through → no fill
 
-- [ ] **1E.5 — Stop loss execution**
+- [x] **1E.5 — Stop loss execution**
   - Day's low <= stop_loss → exit at stop_loss price
   - Applies to full position (pre-TP) or remaining 50% (post-TP)
   - Unit tests: SL hit day 1, day 5, never hit
 
-- [ ] **1E.6 — Take profit (50% close)**
+- [x] **1E.6 — Take profit (50% close)**
   - Day's high >= take_profit → close 50% at TP price
   - Set `tp_50_hit = True`, remaining → trailing stop
   - Unit tests: TP hit → half closed, remaining size correct
 
-- [ ] **1E.7 — Trailing stop (after TP only)**
+- [x] **1E.7 — Trailing stop (after TP only)**
   - Only active when `tp_50_hit = True`
   - `trail = highest_high_since_entry - (2 × signal_day_ATR_14)`
   - Update daily at close. Ratchets up only.
   - Day's low <= trail → close remaining at trail price
   - Unit tests: ratchets up, stays flat on down days, exit when breached
 
-- [ ] **1E.8 — Time stop**
+- [x] **1E.8 — Time stop**
   - Close remaining at close price after 10 trading days (not calendar)
   - Unit tests: 10 days → closed, SL on day 7 → time stop not triggered
 
-- [ ] **1E.9 — Exit priority**
+- [x] **1E.9 — Exit priority**
   - Same-day: SL > TP > trailing > time stop
   - SL + TP same candle → SL wins
   - Unit tests: SL+TP → SL wins, trail+time → trail wins
 
 #### Cost Model
 
-- [ ] **1E.10 — Spread + slippage**
+- [x] **1E.10 — Spread + slippage**
   - Spread: 0.3 pts/side. Slippage: 0.1 pts/side. Total round-trip: 0.8 pts.
   - Unit tests: costs deducted correctly
 
-- [ ] **1E.11 — IG overnight funding**
-  - Look up IG's actual formula. Apply per night held.
+- [x] **1E.11 — IG overnight funding**
+  - Formula: notional × (FEDFUNDS + 2.5%) / 365 per night. Uses FEDFUNDS forward-fill.
   - Unit tests: 1-night, 5-night, 10-night costs
 
 #### Risk Management
 
-- [ ] **1E.12 — Drawdown throttling in backtest**
+- [x] **1E.12 — Drawdown throttling in backtest**
   - Full state machine: NORMAL → THROTTLED_50 (≥8%) → THROTTLED_MAX1 (≥12%) → HALTED (≥15%)
   - THROTTLED_MAX1 inherits halved sizing from THROTTLED_50 AND adds max-1-position
   - In backtest, HALTED → when DD drops below 8% → THROTTLED_50 (not NORMAL). Then DD < 6% → NORMAL.
@@ -640,21 +640,20 @@ Everything depends on these. Build before any feature work.
 
 #### Metrics & Output
 
-- [ ] **1E.13 — Performance metrics**
+- [x] **1E.13 — Performance metrics**
   - Sharpe (annualized, rf=FEDFUNDS), Sortino, profit factor, max DD (% and duration), win rate, total trades, avg win, avg loss, avg win/loss ratio, annualized return
   - Unit tests: hand-calculate for small trade log, verify
 
-- [ ] **1E.14 — Equity curve + trade log**
+- [x] **1E.14 — Equity curve + trade log**
   - Daily equity DataFrame: date, equity, drawdown_pct, throttle_state
-  - Trade log DataFrame: all Trade fields
-  - Write to StorageBackend
+  - Trade log as tuple[Trade, ...] in BacktestResult
   - Unit tests: columns correct, P&L sums match equity changes
 
-- [ ] **1E.15 — Backtest report (Plotly HTML)**
+- [x] **1E.15 — Backtest report (Plotly HTML)**
   - Static HTML: equity curve, drawdown chart, monthly heatmap, trade log table, metrics summary
-  - Plotly embedded, no server. Saved via StorageBackend.
+  - Plotly embedded, no server. Self-contained HTML string.
 
-- [ ] **1E.16 — Backtest integration test**
+- [x] **1E.16 — Backtest integration test**
   - Full engine on synthetic data with known outcomes
   - Verify: fills, P&L, equity consistency
   - Edge cases: no signals, all signals, drawdown halt, TP+SL same candle
