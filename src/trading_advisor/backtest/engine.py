@@ -419,3 +419,73 @@ def evaluate_exits(
     if position.days_held >= _TIME_STOP_DAYS:
         return [ExitEvent(day_close, position.size, ExitReason.TIME_STOP)]
     return []
+
+
+# ------------------------------------------------------------------
+# Cost model
+# ------------------------------------------------------------------
+
+
+_IG_ADMIN_FEE: float = 0.025  # 2.5% annualized IG admin charge for longs
+
+
+def compute_round_trip_cost(
+    size: float,
+    spread_per_side: float,
+    slippage_per_side: float,
+) -> tuple[float, float]:
+    """Compute spread and slippage costs for a full round trip.
+
+    Both entry-side and exit-side costs are included.
+
+    Args:
+        size: Position size in lots.
+        spread_per_side: Spread cost per side in points.
+        slippage_per_side: Slippage cost per side in points.
+
+    Returns:
+        Tuple of (spread_cost, slippage_cost).
+    """
+    spread_cost = 2 * spread_per_side * size
+    slippage_cost = 2 * slippage_per_side * size
+    return spread_cost, slippage_cost
+
+
+def compute_overnight_funding(
+    position_notional: float,
+    fedfunds_rate: float,
+) -> float:
+    """Compute one night's funding charge for a long spread-bet position.
+
+    Uses the IG formula: notional × (FEDFUNDS + 2.5%) / 365.
+
+    Args:
+        position_notional: entry_price × size.
+        fedfunds_rate: Annualized Federal Funds rate as a decimal (e.g. 0.05).
+
+    Returns:
+        Funding charge for one night.
+    """
+    return position_notional * (fedfunds_rate + _IG_ADMIN_FEE) / 365
+
+
+def get_fedfunds_rate(fedfunds: pd.Series, date: pd.Timestamp) -> float:
+    """Look up the FEDFUNDS rate for a given date.
+
+    Uses forward-fill semantics: if the exact date is not in the series,
+    uses the most recent prior value. If no prior value exists, returns 0.0.
+
+    Args:
+        fedfunds: Series indexed by DatetimeIndex with annualized rates.
+        date: The date to look up.
+
+    Returns:
+        The FEDFUNDS rate as a decimal.
+    """
+    if fedfunds.empty:
+        return 0.0
+    # Reindex to include the target date, forward-fill, then look up
+    mask = fedfunds.index <= date
+    if not mask.any():
+        return 0.0
+    return float(fedfunds.loc[mask].iloc[-1])
