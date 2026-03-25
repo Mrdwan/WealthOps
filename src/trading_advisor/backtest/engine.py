@@ -13,6 +13,7 @@ Foundation types implemented in Task 1E.
 
 import datetime
 import enum
+import math
 from dataclasses import dataclass
 
 import pandas as pd
@@ -27,6 +28,7 @@ _DD_HALT: float = 0.15
 _DD_MAX1: float = 0.12
 _DD_THROTTLE: float = 0.08
 _DD_RECOVERY_NORMAL: float = 0.06
+_TIME_STOP_DAYS: int = 10
 
 
 # ------------------------------------------------------------------
@@ -79,6 +81,21 @@ class Trade:
     spread_cost: float
     slippage_cost: float
     funding_cost: float
+
+
+@dataclass(frozen=True)
+class ExitEvent:
+    """A single exit event during position evaluation.
+
+    Attributes:
+        price: Exit price.
+        size: Number of lots to close.
+        reason: The reason for the exit.
+    """
+
+    price: float
+    size: float
+    reason: ExitReason
 
 
 @dataclass(frozen=True)
@@ -338,3 +355,67 @@ def check_fill(buy_stop: float, limit: float, day_high: float, day_low: float) -
         True if the order fills.
     """
     return day_high >= buy_stop and day_low <= limit
+
+
+# ------------------------------------------------------------------
+# Exit evaluation
+# ------------------------------------------------------------------
+
+
+def evaluate_exits(
+    position: _ActivePosition,
+    day_high: float,
+    day_low: float,
+    day_close: float,
+) -> list[ExitEvent]:
+    """Evaluate all exit conditions for an open position.
+
+    Exit priority (highest to lowest):
+      1. Stop loss -- triggers on day_low <= stop_loss
+      2. Take profit -- triggers on day_high >= take_profit (50% close)
+      3. Trailing stop -- triggers on day_low <= trailing_stop (post-TP only)
+      4. Time stop -- triggers when days_held >= 10 trading days
+
+    When SL and TP trigger on the same candle, SL wins (conservative).
+    When trailing and time stop trigger on the same candle, trailing wins.
+    TP does NOT trigger trailing on the same candle -- trailing begins next day.
+
+    The half-size for TP is: math.floor(position.size / 2 * 100) / 100
+    (rounded down to nearest 0.01 lot).
+
+    IMPORTANT: This function does NOT update the position state (tp_50_hit,
+    trailing_stop, highest_high). The caller (main loop) is responsible for
+    applying state changes after processing exit events.
+
+    Args:
+        position: The active position to evaluate.
+        day_high: Day's high price.
+        day_low: Day's low price.
+        day_close: Day's closing price.
+
+    Returns:
+        List of ExitEvent objects. Can be empty (no exit), or contain
+        1 event (full exit) or 1 event (partial TP exit).
+    """
+    if not position.tp_50_hit:
+        # Pre-TP state: full position at risk
+        if day_low <= position.stop_loss:
+            return [ExitEvent(position.stop_loss, position.size, ExitReason.STOP_LOSS)]
+        if day_high >= position.take_profit:
+            half = math.floor(position.size / 2 * 100) / 100
+            if half <= 0:
+                # Position too small to split -- close entire at TP
+                return [ExitEvent(position.take_profit, position.size, ExitReason.TAKE_PROFIT)]
+            return [ExitEvent(position.take_profit, half, ExitReason.TAKE_PROFIT)]
+        if position.days_held >= _TIME_STOP_DAYS:
+            return [ExitEvent(day_close, position.size, ExitReason.TIME_STOP)]
+        return []
+
+    # Post-TP state: remaining position with trailing stop
+    if day_low <= position.stop_loss:
+        return [ExitEvent(position.stop_loss, position.size, ExitReason.STOP_LOSS)]
+    if position.trailing_stop > 0 and day_low <= position.trailing_stop:
+        return [ExitEvent(position.trailing_stop, position.size, ExitReason.TRAILING_STOP)]
+    if position.days_held >= _TIME_STOP_DAYS:
+        return [ExitEvent(day_close, position.size, ExitReason.TIME_STOP)]
+    return []
