@@ -14,11 +14,21 @@ Foundation types implemented in Task 1E.
 import datetime
 import enum
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import pandas as pd
 
+from trading_advisor.guards.base import Guard
+from trading_advisor.guards.pipeline import run_guards
+from trading_advisor.indicators.composite import Signal
 from trading_advisor.portfolio.manager import ThrottleState
+from trading_advisor.strategy.orders import (
+    compute_stop_loss,
+    compute_take_profit,
+    compute_trap_order,
+)
+from trading_advisor.strategy.sizing import compute_position_size
 
 # ------------------------------------------------------------------
 # Constants
@@ -29,6 +39,34 @@ _DD_MAX1: float = 0.12
 _DD_THROTTLE: float = 0.08
 _DD_RECOVERY_NORMAL: float = 0.06
 _TIME_STOP_DAYS: int = 10
+
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+
+def _to_date(timestamp: object) -> datetime.date:
+    """Convert pd.Timestamp or datetime.date to datetime.date.
+
+    Args:
+        timestamp: A pd.Timestamp or datetime.date value.
+
+    Returns:
+        A datetime.date instance.
+
+    Raises:
+        TypeError: If the input cannot be converted.
+    """
+    # pd.Timestamp has a .date() method that returns datetime.date
+    date_attr = getattr(timestamp, "date", None)
+    if date_attr is not None and callable(date_attr):
+        result = date_attr()
+        if isinstance(result, datetime.date):
+            return result
+    if isinstance(timestamp, datetime.date):
+        return timestamp
+    raise TypeError(f"Cannot convert {type(timestamp)} to date")
 
 
 # ------------------------------------------------------------------
@@ -489,3 +527,248 @@ def get_fedfunds_rate(fedfunds: pd.Series, date: pd.Timestamp) -> float:
     if not mask.any():
         return 0.0
     return float(fedfunds.loc[mask].iloc[-1])
+
+
+# ------------------------------------------------------------------
+# Main backtest loop
+# ------------------------------------------------------------------
+
+
+def run_backtest(
+    indicators: pd.DataFrame,
+    eurusd: pd.DataFrame,
+    guards: Sequence[Guard],
+    guards_enabled: dict[str, bool],
+    fedfunds: "pd.Series[float]",
+    starting_capital: float = 15000.0,
+    spread_per_side: float = 0.3,
+    slippage_per_side: float = 0.1,
+) -> BacktestResult:
+    """Run a backtest simulation on pre-computed indicator data.
+
+    Walks through each trading day and simulates: signal generation, trap
+    order fills, exit evaluation (SL/TP/trailing/time), cost accrual
+    (spread, slippage, overnight funding), and equity tracking with
+    drawdown throttling.
+
+    Args:
+        indicators: DataFrame indexed by DatetimeIndex with columns:
+            open, high, low, close, atr_14, adx_14, ema_8, sma_50,
+            sma_200, rsi_14, composite, signal.
+        eurusd: DataFrame indexed by DatetimeIndex with columns:
+            close, sma_200.
+        guards: Sequence of Guard instances to evaluate.
+        guards_enabled: Maps guard name to on/off.
+        fedfunds: Series indexed by DatetimeIndex with FEDFUNDS rates.
+        starting_capital: Initial account balance.
+        spread_per_side: Spread cost per side in points.
+        slippage_per_side: Slippage cost per side in points.
+
+    Returns:
+        BacktestResult with equity curve, trade log, and date range.
+
+    Raises:
+        ValueError: If indicators DataFrame is empty.
+    """
+    if indicators.empty:
+        raise ValueError("indicators must not be empty")
+
+    account = BacktestAccount(starting_capital)
+    trades: list[Trade] = []
+    equity_records: list[dict[str, object]] = []
+    pending: _PendingOrder | None = None
+    position: _ActivePosition | None = None
+
+    dates = sorted(indicators.index)
+    cost_per_side = spread_per_side + slippage_per_side
+
+    for date in dates:
+        row = indicators.loc[date]
+        h = float(row["high"])
+        lo = float(row["low"])
+        c = float(row["close"])
+
+        # -- Phase 1: Fill pending trap order --------------------------
+        if pending is not None:
+            if check_fill(pending.buy_stop, pending.limit, h, lo):
+                equity = account.cash  # no open position -> equity = cash
+                size = compute_position_size(
+                    equity=equity,
+                    cash=account.cash,
+                    entry_price=pending.buy_stop,
+                    atr=pending.signal_atr,
+                    throttle_state=account.throttle_state,
+                    num_open_positions=0,
+                )
+                if size > 0:
+                    sl = compute_stop_loss(
+                        pending.buy_stop,
+                        pending.signal_atr,
+                    )
+                    tp = compute_take_profit(
+                        pending.buy_stop,
+                        pending.signal_atr,
+                        pending.signal_adx,
+                    )
+                    notional = size * pending.buy_stop
+                    entry_cost = cost_per_side * size
+                    account.open_position(notional, entry_cost)
+                    entry_date: datetime.date = _to_date(date)
+                    position = _ActivePosition(
+                        entry_price=pending.buy_stop,
+                        entry_date=entry_date,
+                        size=size,
+                        original_size=size,
+                        stop_loss=sl,
+                        take_profit=tp,
+                        signal_atr=pending.signal_atr,
+                        tp_50_hit=False,
+                        highest_high=h,
+                        trailing_stop=0.0,
+                        days_held=0,
+                        cumulative_funding=0.0,
+                    )
+            pending = None  # always expires after 1 day
+
+        # -- Phase 2: Evaluate exits -----------------------------------
+        if position is not None:
+            position.days_held += 1
+            position.highest_high = max(position.highest_high, h)
+
+            exit_events = evaluate_exits(position, h, lo, c)
+
+            for ev in exit_events:
+                spread_cost, slippage_cost = compute_round_trip_cost(
+                    ev.size,
+                    spread_per_side,
+                    slippage_per_side,
+                )
+                # position.size is always > 0 here: evaluate_exits only
+                # returns events while the position has remaining size,
+                # and each event closes at most position.size lots.
+                funding_share = position.cumulative_funding * (ev.size / position.size)
+
+                raw_pnl = (ev.price - position.entry_price) * ev.size
+                net_pnl = raw_pnl - spread_cost - slippage_cost - funding_share
+
+                exit_date: datetime.date = _to_date(date)
+
+                trades.append(
+                    Trade(
+                        entry_date=position.entry_date,
+                        exit_date=exit_date,
+                        entry_price=position.entry_price,
+                        exit_price=ev.price,
+                        size=ev.size,
+                        direction="LONG",
+                        pnl=net_pnl,
+                        exit_reason=ev.reason,
+                        days_held=position.days_held,
+                        spread_cost=spread_cost,
+                        slippage_cost=slippage_cost,
+                        funding_cost=funding_share,
+                    )
+                )
+
+                proceeds = ev.size * ev.price
+                exit_cost = cost_per_side * ev.size
+                account.close_position(proceeds, exit_cost)
+
+                position.cumulative_funding -= funding_share
+                position.size -= ev.size
+
+            if position.size <= 0:
+                position = None
+            else:
+                # TP just triggered this candle -> mark tp_50_hit
+                if (
+                    exit_events
+                    and exit_events[0].reason == ExitReason.TAKE_PROFIT
+                    and not position.tp_50_hit
+                ):
+                    position.tp_50_hit = True
+
+                # Update trailing stop (only meaningful when tp_50_hit)
+                if position.tp_50_hit:
+                    new_trail = position.highest_high - 2 * position.signal_atr
+                    position.trailing_stop = max(
+                        position.trailing_stop,
+                        new_trail,
+                    )
+
+                # Charge overnight funding
+                ff_rate = get_fedfunds_rate(fedfunds, date)
+                notional = position.entry_price * position.size
+                funding = compute_overnight_funding(notional, ff_rate)
+                position.cumulative_funding += funding
+                account.charge_funding(funding)
+
+        # -- Phase 3: Update equity ------------------------------------
+        unrealized = 0.0
+        if position is not None:
+            unrealized = (c - position.entry_price) * position.size
+        equity = account.cash + unrealized
+        account.update_equity(equity)
+
+        equity_records.append(
+            {
+                "date": date,
+                "equity": equity,
+                "drawdown_pct": account.drawdown,
+                "throttle_state": account.throttle_state.value,
+            }
+        )
+
+        # -- Phase 4: New signal ---------------------------------------
+        if position is None and pending is None and account.throttle_state != ThrottleState.HALTED:
+            sig_str = str(row["signal"])
+            if sig_str in (Signal.BUY.value, Signal.STRONG_BUY.value):
+                eurusd_row = eurusd.loc[date] if date in eurusd.index else None
+
+                guard_kwargs: dict[str, object] = {
+                    "adx": float(row["adx_14"]),
+                    "close": float(row["close"]),
+                    "ema_8": float(row["ema_8"]),
+                    "drawdown": account.drawdown,
+                    "evaluation_date": _to_date(date),
+                }
+                if eurusd_row is not None:
+                    guard_kwargs["eurusd_close"] = float(eurusd_row["close"])
+                    guard_kwargs["eurusd_sma_200"] = float(eurusd_row["sma_200"])
+                else:
+                    guard_kwargs["eurusd_close"] = 0.0
+                    guard_kwargs["eurusd_sma_200"] = 0.0
+
+                guard_results = run_guards(
+                    guards,
+                    guards_enabled,
+                    **guard_kwargs,
+                )
+                if all(gr.passed for gr in guard_results):
+                    trap = compute_trap_order(
+                        float(row["high"]),
+                        float(row["atr_14"]),
+                    )
+                    signal_date: datetime.date = _to_date(date)
+                    pending = _PendingOrder(
+                        buy_stop=trap.buy_stop,
+                        limit=trap.limit,
+                        signal_atr=float(row["atr_14"]),
+                        signal_adx=float(row["adx_14"]),
+                        signal_date=signal_date,
+                    )
+
+    # Build result
+    equity_curve = pd.DataFrame(equity_records)
+    equity_curve = equity_curve.set_index("date")
+
+    start: datetime.date = _to_date(dates[0])
+    end: datetime.date = _to_date(dates[-1])
+
+    return BacktestResult(
+        equity_curve=equity_curve,
+        trades=tuple(trades),
+        start_date=start,
+        end_date=end,
+        starting_capital=starting_capital,
+    )
