@@ -1033,13 +1033,13 @@ class TestBacktestParams:
         assert len(sl_trades) > 0, "Default ATR mult should trigger SL"
         # Wide ATR (3.0): SL = 2011 - 3*50 = 1861, low only goes to 1900 -> no SL hit
         assert len(r_wide.trades) > 0, "Expected trades with wide ATR"
-        assert all(
-            t.exit_reason != ExitReason.STOP_LOSS for t in r_wide.trades
-        ), "Wide ATR mult should NOT trigger SL (SL=1861, low=1900)"
+        assert all(t.exit_reason != ExitReason.STOP_LOSS for t in r_wide.trades), (
+            "Wide ATR mult should NOT trigger SL (SL=1861, low=1900)"
+        )
         # Should exit via time stop instead
-        assert all(
-            t.exit_reason == ExitReason.TIME_STOP for t in r_wide.trades
-        ), "Wide ATR trade should exit via time stop"
+        assert all(t.exit_reason == ExitReason.TIME_STOP for t in r_wide.trades), (
+            "Wide ATR trade should exit via time stop"
+        )
 
     def test_composite_threshold_controls_signal(self) -> None:
         """Higher threshold = fewer signals."""
