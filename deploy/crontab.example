@@ -1,0 +1,8 @@
+# WealthOps scheduled jobs (Mon-Fri only)
+# Install: crontab -e, then paste these lines
+
+# Data ingest + signal scan at 23:00 UTC
+0 23 * * 1-5  cd ~/wealthops && wealthops ingest 2>&1 | tee -a logs/cron.log
+
+# Daily briefing at 09:00 UTC
+0 9 * * 1-5   cd ~/wealthops && wealthops briefing 2>&1 | tee -a logs/cron.log
