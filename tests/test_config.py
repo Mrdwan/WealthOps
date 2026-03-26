@@ -168,3 +168,55 @@ def test_create_storage_raises_for_unknown_type(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="s3"):
         create_storage(settings)
+
+
+# ---------------------------------------------------------------------------
+# guards_enabled
+# ---------------------------------------------------------------------------
+
+
+def test_guards_enabled_default_empty_dict(monkeypatch: pytest.MonkeyPatch) -> None:
+    """guards_enabled defaults to empty dict when env var is not set."""
+    _set_required(monkeypatch)
+    monkeypatch.delenv("WEALTHOPS_GUARDS_ENABLED", raising=False)
+
+    settings = load_settings()
+
+    assert settings.guards_enabled == {}
+
+
+def test_guards_enabled_parses_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """guards_enabled parses a JSON string from the env var."""
+    _set_required(monkeypatch)
+    monkeypatch.setenv("WEALTHOPS_GUARDS_ENABLED", '{"MacroGate": false, "TrendGate": true}')
+
+    settings = load_settings()
+
+    assert settings.guards_enabled == {"MacroGate": False, "TrendGate": True}
+
+
+def test_guards_enabled_invalid_json_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Invalid JSON in WEALTHOPS_GUARDS_ENABLED raises ValueError."""
+    _set_required(monkeypatch)
+    monkeypatch.setenv("WEALTHOPS_GUARDS_ENABLED", "not json")
+
+    with pytest.raises(ValueError, match="valid JSON"):
+        load_settings()
+
+
+def test_guards_enabled_non_dict_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-dict JSON (e.g. array) raises ValueError."""
+    _set_required(monkeypatch)
+    monkeypatch.setenv("WEALTHOPS_GUARDS_ENABLED", "[1, 2]")
+
+    with pytest.raises(ValueError, match="JSON object"):
+        load_settings()
+
+
+def test_guards_enabled_non_bool_value_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-boolean values in the dict raise ValueError."""
+    _set_required(monkeypatch)
+    monkeypatch.setenv("WEALTHOPS_GUARDS_ENABLED", '{"MacroGate": "yes"}')
+
+    with pytest.raises(ValueError, match="booleans"):
+        load_settings()

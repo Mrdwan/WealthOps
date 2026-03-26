@@ -90,7 +90,7 @@ def _run_ingest() -> None:
     calendar_path = settings.data_dir / "calendars" / "economic_calendar.json"
     calendar = load_calendar(calendar_path)
     guards = [MacroGate(), TrendGate(), EventGuard(calendar), PullbackZone(), DrawdownGate()]
-    guards_enabled: dict[str, bool] = {}  # all enabled by default
+    guards_enabled = settings.guards_enabled
 
     # EUR/USD needs SMA_200 for MacroGate
     eurusd_with_sma = eurusd_df.copy()
