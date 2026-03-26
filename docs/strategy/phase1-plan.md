@@ -300,8 +300,8 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 ## Current Status
 
-**Active task:** Task 1E (Backtest Engine)
-**Blockers:** None
+**Active task:** Task 1G (Telegram Bot)
+**Blockers:** Awaiting 1F.13 GO decision on real data
 **Last updated:** 2026-03-25
 
 ---
@@ -662,52 +662,52 @@ Everything depends on these. Build before any feature work.
 
 ### Task 1F: Walk-Forward & Validation
 
-- [ ] **1F.1 — Walk-forward framework**
+- [x] **1F.1 — Walk-forward framework**
   - Expanding: 3yr train, 6mo test, 6mo roll. Fixed params.
   - Output: per-window Sharpe (in-sample + OOS)
   - Unit tests: window slicing on synthetic data
 
-- [ ] **1F.2 — Walk-forward efficiency**
+- [x] **1F.2 — Walk-forward efficiency**
   - WFE = mean(OOS Sharpe) / mean(in-sample Sharpe). Pass >50%.
   - Unit tests: known Sharpes → verify
 
-- [ ] **1F.3 — Monte Carlo bootstrap**
+- [x] **1F.3 — Monte Carlo bootstrap**
   - 10,000 resamples. 5th percentile terminal equity > starting capital.
   - Unit tests: resampling, percentile
 
-- [ ] **1F.4 — Shuffled-price test**
+- [x] **1F.4 — Shuffled-price test**
   - Permute daily returns, re-run 1,000+ times. Real Sharpe > 99th pctile (p < 0.01).
   - Unit tests: shuffling preserves distribution, destroys sequence
 
-- [ ] **1F.5 — t-statistic**
+- [x] **1F.5 — t-statistic**
   - `t = mean_return × √N / std_return > 2.0`
   - Unit tests: known returns → verify
 
-- [ ] **1F.6 — Composite threshold sensitivity**
+- [x] **1F.6 — Composite threshold sensitivity**
   - 1.0σ to 2.5σ in 0.25σ steps → Sharpe, DD, trade count
 
-- [ ] **1F.7 — ATR multiplier sensitivity**
+- [x] **1F.7 — ATR multiplier sensitivity**
   - 1.5, 2.0, 2.5, 3.0 → Sharpe, DD, win rate
 
-- [ ] **1F.8 — TP multiplier sensitivity**
+- [x] **1F.8 — TP multiplier sensitivity**
   - min 2.0–3.0, max 3.5–5.0 → Sharpe, profit factor
 
-- [ ] **1F.9 — Momentum lookback sensitivity**
+- [x] **1F.9 — Momentum lookback sensitivity**
   - 3M (63d), 6M (126d), 9M (189d), 12M (252d) → full backtest each
 
-- [ ] **1F.10 — EMA periods sensitivity**
+- [x] **1F.10 — EMA periods sensitivity**
   - 8/20/50, 10/21/55, 12/26/50 → full backtest each
 
-- [ ] **1F.11 — Fill price sensitivity**
+- [x] **1F.11 — Fill price sensitivity**
   - Default: fill at buy_stop. Test: fill at buy_stop + 0.5 × (limit - buy_stop) (midpoint).
   - Strategy must still be profitable with adverse fill assumption.
   - If it breaks → edge is too thin, investigate.
 
-- [ ] **1F.12 — Guard ablation study**
+- [x] **1F.12 — Guard ablation study**
   - Disable each guard individually. Compare Sharpe/DD/trades vs baseline.
   - If disabling improves or doesn't change → flag for removal.
 
-- [ ] **1F.13 — GO/NO-GO report**
+- [x] **1F.13 — GO/NO-GO report**
   - Compile results. Check kill conditions. PASS/FAIL per criterion.
 
 ---
