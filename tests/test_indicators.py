@@ -208,9 +208,9 @@ class TestComputeMacdHistogram:
         # [0.0, 1/9, -1/27, 2/27, 13/243]
         expected = [0.0, 1 / 9, -1 / 27, 2 / 27, 13 / 243]
         for i, exp in enumerate(expected):
-            assert result.iloc[i] == pytest.approx(
-                exp, abs=1e-4
-            ), f"Mismatch at index {i}: got {result.iloc[i]}, expected {exp}"
+            assert result.iloc[i] == pytest.approx(exp, abs=1e-4), (
+                f"Mismatch at index {i}: got {result.iloc[i]}, expected {exp}"
+            )
 
     def test_constant_prices_zero(self) -> None:
         """All EMAs equal constant price → MACD = 0, Signal = 0, Histogram = 0."""
@@ -218,9 +218,9 @@ class TestComputeMacdHistogram:
         result = compute_macd_histogram(close)
 
         for i in range(len(result)):
-            assert result.iloc[i] == pytest.approx(
-                0.0
-            ), f"Expected 0.0 at index {i}, got {result.iloc[i]}"
+            assert result.iloc[i] == pytest.approx(0.0), (
+                f"Expected 0.0 at index {i}, got {result.iloc[i]}"
+            )
 
     def test_uptrend_positive(self) -> None:
         """In a sustained uptrend the histogram should be positive at the last bar."""

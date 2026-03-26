@@ -15,7 +15,7 @@ repos:
 
   # Ruff: linting + auto-fix
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+    rev: v0.15.5
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
