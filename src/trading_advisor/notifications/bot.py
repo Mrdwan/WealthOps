@@ -276,7 +276,7 @@ class TelegramBot:
     def start_polling(self) -> None:
         """Start the bot in long-polling mode. Blocks until stopped."""
         app = self._build_application()
-        app.run_polling()
+        app.run_polling(stop_signals=None)
 
     async def process_webhook_update(self, update_data: dict[str, object]) -> None:
         """Process a single Telegram update for webhook mode (Lambda).
