@@ -1,19 +1,24 @@
-"""Entry points for the WealthOps runner.
+"""Orchestration functions for WealthOps jobs.
 
-Commands:
-  wealthops ingest    — fetch data + indicators + signal scan + notify
-  wealthops briefing  — send daily briefing
-  wealthops bot       — start Telegram bot (polling mode)
+Functions:
+  run_ingest    — fetch data + indicators + signal scan + notify
+  run_briefing  — send daily briefing
+  run_bot       — start Telegram bot (polling mode)
 """
 
 import datetime
-import sys
 
 _STARTING_CAPITAL: float = 15000.0
+_BOOTSTRAP_START: str = "2015-01-01"
 
 
-def _run_ingest() -> None:
-    """Full ingest pipeline: fetch -> indicators -> composite -> signal -> notify."""
+def run_ingest(*, bootstrap: bool = False) -> None:
+    """Full ingest pipeline: fetch -> indicators -> composite -> signal -> notify.
+
+    Args:
+        bootstrap: When ``True``, fetch full history from ``2015-01-01``.
+            Defaults to ``False``.
+    """
     import asyncio
     import time
 
@@ -46,7 +51,8 @@ def _run_ingest() -> None:
     ingestor = DataIngestor(ohlcv_provider, macro_provider, storage)
     today = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d")
     print(f"[ingest] Running daily ingest up to {today} ...")
-    results = ingestor.run_daily_ingest(end_date=today)
+    start_date = _BOOTSTRAP_START if bootstrap else None
+    results = ingestor.run_daily_ingest(end_date=today, start_date=start_date)
 
     for symbol, result in results.items():
         status = "OK" if result.valid else "FAILED"
@@ -137,11 +143,15 @@ def _run_ingest() -> None:
             signal_class=signal_class,
         )
     )
+    storage.write_json(
+        "state/heartbeat",
+        {"command": "ingest", "timestamp": timestamp.isoformat()},
+    )
 
     print("[ingest] Done.")
 
 
-def _run_briefing() -> None:
+def run_briefing() -> None:
     """Daily briefing: portfolio + market -> Telegram -> heartbeat."""
     import asyncio
     import time
@@ -215,11 +225,15 @@ def _run_briefing() -> None:
             signal_class=signal_class,
         )
     )
+    storage.write_json(
+        "state/heartbeat",
+        {"command": "briefing", "timestamp": timestamp.isoformat()},
+    )
 
     print("[briefing] Done.")
 
 
-def _run_bot() -> None:
+def run_bot() -> None:
     """Start the Telegram bot in polling mode."""
     from trading_advisor.config import create_storage, load_settings
     from trading_advisor.notifications.bot import TelegramBot
@@ -243,24 +257,3 @@ def _run_bot() -> None:
     )
     print("[bot] Starting Telegram bot in polling mode ...")
     bot.start_polling()
-
-
-def main() -> None:
-    """CLI entry point dispatched by pyproject.toml [project.scripts]."""
-    commands = ("ingest", "briefing", "bot")
-    if len(sys.argv) < 2 or sys.argv[1] not in commands:
-        print(f"Usage: wealthops [{' | '.join(commands)}]")
-        sys.exit(1)
-
-    command = sys.argv[1]
-
-    if command == "ingest":
-        _run_ingest()
-    elif command == "briefing":
-        _run_briefing()
-    elif command == "bot":
-        _run_bot()
-
-
-if __name__ == "__main__":
-    main()

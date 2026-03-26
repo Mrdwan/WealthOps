@@ -29,6 +29,7 @@ repos:
         additional_dependencies:
           - types-requests
           - pandas-stubs
+          - click
         args: []
         files: ^src/
 

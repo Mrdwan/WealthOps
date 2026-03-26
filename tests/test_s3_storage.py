@@ -1,5 +1,6 @@
 """Tests for S3Storage backend."""
 
+import builtins
 import io
 import sys
 from typing import Any
@@ -258,16 +259,27 @@ def test_s3_storage_import_error_when_boto3_missing(
     """S3Storage raises ImportError with a helpful message when boto3 is missing."""
     monkeypatch.delitem(sys.modules, "trading_advisor.storage.s3", raising=False)
 
-    # Remove boto3 so the import inside __init__ fails
-    original_boto3 = sys.modules.pop("boto3", None)
-    try:
-        from trading_advisor.storage.s3 import S3Storage  # noqa: PLC0415
+    # Remove all boto3/botocore modules from cache
+    for mod_name in list(sys.modules):
+        if mod_name == "boto3" or mod_name.startswith("boto3."):
+            monkeypatch.delitem(sys.modules, mod_name, raising=False)
+        if mod_name == "botocore" or mod_name.startswith("botocore."):
+            monkeypatch.delitem(sys.modules, mod_name, raising=False)
 
-        with pytest.raises(ImportError, match="pip install wealthops"):
-            S3Storage(bucket="test-bucket")
-    finally:
-        if original_boto3 is not None:
-            sys.modules["boto3"] = original_boto3
+    # Override import to block boto3
+    _real_import = builtins.__import__
+
+    def _blocked_import(name: str, *args: object, **kwargs: object) -> object:
+        if name in ("boto3", "botocore"):
+            raise ImportError(f"No module named {name!r}")
+        return _real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _blocked_import)
+
+    from trading_advisor.storage.s3 import S3Storage  # noqa: PLC0415
+
+    with pytest.raises(ImportError, match="pip install wealthops"):
+        S3Storage(bucket="test-bucket")
 
 
 # ---------------------------------------------------------------------------
