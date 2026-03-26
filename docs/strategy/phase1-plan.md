@@ -300,8 +300,8 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 ## Current Status
 
-**Active task:** Task 1H (Packaging & Deployment)
-**Blockers:** None
+**Active task:** Task 1H.10-1H.12 (manual deployment & verification)
+**Blockers:** None — 1H.1-1H.9 complete, remaining tasks require real infrastructure
 **Last updated:** 2026-03-26
 
 ---
@@ -767,19 +767,19 @@ Unit tests for each: valid input, invalid input, edge cases.
 
 ### Task 1H: Packaging & Deployment
 
-- [ ] **1H.1 — S3Storage** — behind `[aws]` extra. Same interface. Mock boto3. Graceful if missing.
-- [ ] **1H.2 — CLI skeleton** — `wealthops`: ingest, briefing, bot, backtest, health
-- [ ] **1H.3 — wealthops ingest** — calls `run_ingest()`, `--bootstrap` flag
-- [ ] **1H.4 — wealthops briefing** — calls `run_briefing()`
-- [ ] **1H.5 — wealthops bot** — polling or webhook mode
-- [ ] **1H.6 — wealthops backtest** — runs engine, outputs report
-- [ ] **1H.7 — wealthops health** — check heartbeat, exit 0/1, stale = >14h
+- [x] **1H.1 — S3Storage** — behind `[aws]` extra. Same interface. Mock boto3. Graceful if missing.
+- [x] **1H.2 — CLI skeleton** — `wealthops`: ingest, briefing, bot, backtest, health
+- [x] **1H.3 — wealthops ingest** — calls `run_ingest()`, `--bootstrap` flag
+- [x] **1H.4 — wealthops briefing** — calls `run_briefing()`
+- [x] **1H.5 — wealthops bot** — polling or webhook mode
+- [x] **1H.6 — wealthops backtest** — runs engine, outputs report
+- [x] **1H.7 — wealthops health** — check heartbeat, exit 0/1, stale = >14h
 
-- [ ] **1H.8 — pyproject.toml**
+- [x] **1H.8 — pyproject.toml**
   - Deps: pandas, requests, fredapi, python-telegram-bot, python-dotenv, click/typer, plotly
   - Optional: `[aws]` with boto3. Scripts: `wealthops = "trading_advisor.cli:main"`. Python >=3.12.
 
-- [ ] **1H.9 — Deploy configs** — crontab, systemd, Lambda handler, Dockerfile, EventBridge
+- [x] **1H.9 — Deploy configs** — crontab, systemd, Lambda handler, Dockerfile, EventBridge
 
 - [ ] **1H.10 — Deploy to target** — install, env vars, bootstrap, cron + bot
 - [ ] **1H.11 — Monitoring** — UptimeRobot or CloudWatch
