@@ -6,7 +6,13 @@ No I/O, no async.
 
 import datetime
 
-from trading_advisor.portfolio.manager import PortfolioState
+from trading_advisor.notifications.signal_store import SignalStore
+from trading_advisor.portfolio.manager import (
+    PortfolioManager,
+    PortfolioState,
+    Position,
+    ThrottleState,
+)
 
 
 def handle_status(state: PortfolioState, starting_capital: float) -> str:
@@ -128,3 +134,133 @@ def handle_help() -> str:
         "/resume    — resume from HALTED\n"
         "/help      — this message"
     )
+
+
+def handle_executed(
+    manager: PortfolioManager,
+    signal_store: SignalStore,
+    signal_date: str,
+    execution_price: float,
+) -> str:
+    """Confirm trade execution: open a position from the pending signal.
+
+    Args:
+        manager: Portfolio manager to record the opened position.
+        signal_store: Store holding the pending signal.
+        signal_date: ISO date string the signal was issued on (e.g. "2026-03-10").
+        execution_price: Actual fill price of the trade.
+
+    Returns:
+        A multi-line string confirming execution or describing the error.
+    """
+    signal = signal_store.load_pending()
+    if signal is None:
+        return "❌ No pending signal."
+    if signal.date.isoformat() != signal_date:
+        return f"❌ No pending signal for {signal_date}."
+
+    signal_atr = (signal.trap_order_stop - signal.stop_loss) / 2.0
+    position = Position(
+        symbol=signal.asset,
+        entry_price=execution_price,
+        size=signal.position_size,
+        entry_date=signal.date,
+        stop_loss=signal.stop_loss,
+        take_profit=signal.take_profit,
+        signal_atr=signal_atr,
+    )
+    manager.open_position(position)
+    signal_store.clear_pending()
+
+    return (
+        f"✅ Executed: {signal.asset} {signal.direction}\n"
+        "\n"
+        f"Entry:  {execution_price:.2f}\n"
+        f"Size:   {signal.position_size:.2f} lots\n"
+        f"SL:     {signal.stop_loss:.2f}\n"
+        f"TP:     {signal.take_profit:.2f}\n"
+        f"Risk:   €{signal.risk_amount:.2f}\n"
+        "\n"
+        "Position opened."
+    )
+
+
+def handle_skip(signal_store: SignalStore, signal_date: str) -> str:
+    """Skip a pending signal without executing it.
+
+    Args:
+        signal_store: Store holding the pending signal.
+        signal_date: ISO date string identifying the signal to skip.
+
+    Returns:
+        A confirmation string or an error message.
+    """
+    signal = signal_store.load_pending()
+    if signal is None:
+        return "❌ No pending signal."
+    if signal.date.isoformat() != signal_date:
+        return f"❌ No pending signal for {signal_date}."
+
+    signal_store.clear_pending()
+    return f"⏭️ Signal for {signal_date} skipped."
+
+
+def handle_close(
+    manager: PortfolioManager,
+    symbol: str,
+    exit_price: float,
+) -> str:
+    """Close an open position and record the realized P&L.
+
+    Symbol matching is slash-insensitive (e.g. "XAUUSD" matches "XAU/USD").
+
+    Args:
+        manager: Portfolio manager holding the open positions.
+        symbol: Instrument identifier (with or without slash).
+        exit_price: Price at which the position is closed.
+
+    Returns:
+        A multi-line string showing entry, exit, P&L, or an error message.
+    """
+    normalized = symbol.replace("/", "")
+    state = manager.state
+    match: Position | None = None
+    for pos in state.positions:
+        if pos.symbol.replace("/", "") == normalized:
+            match = pos
+            break
+
+    if match is None:
+        return f"❌ No open position for {symbol}."
+
+    pnl = manager.close_position(match.symbol, exit_price, match.size)
+    pnl_str = f"+€{pnl:.2f}" if pnl >= 0 else f"-€{abs(pnl):.2f}"
+
+    return (
+        f"✅ Closed: {match.symbol}\n"
+        "\n"
+        f"Entry:  {match.entry_price:.2f}\n"
+        f"Exit:   {exit_price:.2f}\n"
+        f"P&L:    {pnl_str}\n"
+        "\n"
+        "Trade recorded."
+    )
+
+
+def handle_resume(manager: PortfolioManager) -> str:
+    """Manually resume trading from HALTED state.
+
+    Args:
+        manager: Portfolio manager currently in HALTED state.
+
+    Returns:
+        A multi-line string confirming the new state, or an error if not HALTED.
+    """
+    state = manager.state
+    if state.throttle_state != ThrottleState.HALTED:
+        return f"❌ Not in HALTED state. Current: {state.throttle_state.value}"
+
+    new_state = manager.resume_from_halted()
+    dd = manager.get_drawdown() * 100
+
+    return f"✅ Resumed trading.\n\nPrevious: HALTED\nCurrent:  {new_state.value} (DD: {dd:.1f}%)"
