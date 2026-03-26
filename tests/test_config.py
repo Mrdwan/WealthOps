@@ -163,11 +163,62 @@ def test_create_storage_raises_for_unknown_type(tmp_path: Path) -> None:
         fred_api_key="f",
         telegram_bot_token="b",
         telegram_chat_id="c",
-        storage_type="s3",
+        storage_type="gcs",
         data_dir=tmp_path,
     )
-    with pytest.raises(ValueError, match="s3"):
+    with pytest.raises(ValueError, match="gcs"):
         create_storage(settings)
+
+
+def test_create_storage_s3_empty_bucket_raises(tmp_path: Path) -> None:
+    """`create_storage` raises ValueError when s3_bucket is empty for storage_type='s3'."""
+    settings = Settings(
+        tiingo_api_key="t",
+        fred_api_key="f",
+        telegram_bot_token="b",
+        telegram_chat_id="c",
+        storage_type="s3",
+        s3_bucket="",
+        data_dir=tmp_path,
+    )
+    with pytest.raises(ValueError, match="WEALTHOPS_S3_BUCKET"):
+        create_storage(settings)
+
+
+def test_create_storage_returns_s3_storage(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """`create_storage` returns an S3Storage instance for storage_type='s3'."""
+    import sys
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_boto3 = MagicMock()
+    mock_boto3.client.return_value = mock_client
+    mock_botocore_exc = MagicMock()
+    mock_botocore_exc.ClientError = Exception
+    mock_botocore = MagicMock()
+    mock_botocore.exceptions = mock_botocore_exc
+
+    monkeypatch.setitem(sys.modules, "boto3", mock_boto3)
+    monkeypatch.setitem(sys.modules, "botocore", mock_botocore)
+    monkeypatch.setitem(sys.modules, "botocore.exceptions", mock_botocore_exc)
+    monkeypatch.delitem(sys.modules, "trading_advisor.storage.s3", raising=False)
+
+    from trading_advisor.storage.s3 import S3Storage  # noqa: PLC0415
+
+    settings = Settings(
+        tiingo_api_key="t",
+        fred_api_key="f",
+        telegram_bot_token="b",
+        telegram_chat_id="c",
+        storage_type="s3",
+        s3_bucket="test-bucket",
+        data_dir=tmp_path,
+    )
+    backend = create_storage(settings)
+    assert isinstance(backend, S3Storage)
 
 
 # ---------------------------------------------------------------------------
