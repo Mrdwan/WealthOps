@@ -1,0 +1,16 @@
+[Unit]
+Description=WealthOps Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/wealthops
+ExecStart=wealthops bot
+Restart=always
+RestartSec=10
+EnvironmentFile=/home/pi/wealthops/.env
+
+[Install]
+WantedBy=multi-user.target

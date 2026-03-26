@@ -1,0 +1,16 @@
+{
+  "schedules": [
+    {
+      "name": "wealthops-ingest",
+      "description": "Daily ingest at 23:00 UTC Mon-Fri",
+      "schedule_expression": "cron(0 23 ? * MON-FRI *)",
+      "target_input": "{\"command\": \"ingest\"}"
+    },
+    {
+      "name": "wealthops-briefing",
+      "description": "Daily briefing at 09:00 UTC Mon-Fri",
+      "schedule_expression": "cron(0 9 ? * MON-FRI *)",
+      "target_input": "{\"command\": \"briefing\"}"
+    }
+  ]
+}

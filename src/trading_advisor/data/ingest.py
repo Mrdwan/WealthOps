@@ -144,7 +144,11 @@ class DataIngestor:
         else:
             self._storage.write_parquet(storage_key, new_data)
 
-    def run_daily_ingest(self, end_date: str) -> dict[str, ValidationResult]:
+    def run_daily_ingest(
+        self,
+        end_date: str,
+        start_date: str | None = None,
+    ) -> dict[str, ValidationResult]:
         """Run the full daily ingest for all configured symbols and macro series.
 
         Ingests XAUUSD and EURUSD OHLCV data, plus VIX, T10Y2Y, and FEDFUNDS
@@ -152,13 +156,15 @@ class DataIngestor:
 
         Args:
             end_date: End date in ``'YYYY-MM-DD'`` format.
+            start_date: Optional start date override. Defaults to ``_DEFAULT_START``
+                (``2020-01-01``) when ``None``.
 
         Returns:
             Dictionary mapping OHLCV symbol name to its
             :class:`~trading_advisor.data.validation.ValidationResult`. Keys
             are ``'XAUUSD'`` and ``'EURUSD'``.
         """
-        start = _DEFAULT_START
+        start = start_date or _DEFAULT_START
 
         xau_result = self.ingest_ohlcv("XAUUSD", start, end_date, "ohlcv/XAUUSD_daily")
         eur_result = self.ingest_ohlcv("EURUSD", start, end_date, "ohlcv/EURUSD_daily")

@@ -425,3 +425,30 @@ def test_run_daily_ingest_calls_all_five_and_returns_two_results(
     assert storage.exists("macro/VIXCLS")
     assert storage.exists("macro/T10Y2Y")
     assert storage.exists("macro/FEDFUNDS")
+
+
+def test_run_daily_ingest_uses_custom_start_date(tmp_path: Path) -> None:
+    """run_daily_ingest passes start_date override to providers."""
+    storage = LocalStorage(tmp_path)
+    ohlcv_data = _make_ohlcv("2015-01-01", 5)
+    macro_data = _make_macro("2015-01-01", 5)
+
+    recorded_starts: list[str] = []
+
+    class RecordingOHLCVProvider(FakeOHLCVProvider):
+        """Wraps FakeOHLCVProvider to record the start arg."""
+
+        def fetch_ohlcv(self, symbol: str, start: str, end: str) -> pd.DataFrame:
+            recorded_starts.append(start)
+            return super().fetch_ohlcv(symbol, start, end)
+
+    ingestor = DataIngestor(
+        ohlcv_provider=RecordingOHLCVProvider(ohlcv_data),
+        macro_provider=FakeMacroProvider(macro_data),
+        storage=storage,
+    )
+
+    results = ingestor.run_daily_ingest("2024-12-31", start_date="2015-01-01")
+
+    assert results["XAUUSD"].valid is True
+    assert all(s == "2015-01-01" for s in recorded_starts)

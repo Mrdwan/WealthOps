@@ -136,4 +136,12 @@ def create_storage(settings: Settings) -> StorageBackend:
     """
     if settings.storage_type == "local":
         return LocalStorage(settings.data_dir)
-    raise ValueError(f"Unknown storage type: {settings.storage_type!r}. Supported types: 'local'.")
+    if settings.storage_type == "s3":
+        if not settings.s3_bucket:
+            raise ValueError("WEALTHOPS_S3_BUCKET is required when storage type is 's3'.")
+        from trading_advisor.storage.s3 import S3Storage  # noqa: PLC0415
+
+        return S3Storage(bucket=settings.s3_bucket)
+    raise ValueError(
+        f"Unknown storage type: {settings.storage_type!r}. Supported types: 'local', 's3'."
+    )
