@@ -300,9 +300,9 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 ## Current Status
 
-**Active task:** Task 1G (Telegram Bot)
-**Blockers:** Awaiting 1F.13 GO decision on real data
-**Last updated:** 2026-03-25
+**Active task:** Task 1H (Packaging & Deployment)
+**Blockers:** None
+**Last updated:** 2026-03-26
 
 ---
 
@@ -712,54 +712,54 @@ Everything depends on these. Build before any feature work.
 
 ---
 
-### Task 1G: Telegram Bot
+### Task 1G: Telegram Bot ✅
 
 Build only after 1F.13 = GO.
 
 #### Message Formatting
 
-- [ ] **1G.1 — Signal card formatter**
+- [x] **1G.1 — Signal card formatter**
   - `Signal` → Telegram message with emoji (🟢📊🎯🛑✅)
   - Unit tests: known Signal → verify output
 
-- [ ] **1G.2 — Daily briefing formatter**
+- [x] **1G.2 — Daily briefing formatter**
   - Portfolio + market → briefing. Sections: portfolio, positions, risk, market, signals.
   - No-signal: "Cash is a position."
   - Unit tests: with position, empty, throttled
 
-- [ ] **1G.3 — Heartbeat formatter**
+- [x] **1G.3 — Heartbeat formatter**
   - `✓ ingest 2026-03-10 23:00 UTC — 0.4s — XAU composite: 1.2σ NEUTRAL`
   - Sent to `WEALTHOPS_TELEGRAM_HEARTBEAT_CHAT_ID`
 
 #### Bot Commands
 
-- [ ] **1G.4 — /status** — equity, P&L, drawdown, throttle state
-- [ ] **1G.5 — /portfolio** — positions, entry, unrealized P&L, days held, cash, allocation %
-- [ ] **1G.6 — /executed \<id\>** — confirm execution (optional price), opens position
-- [ ] **1G.7 — /skip \<id\>** — skip signal, mark skipped
-- [ ] **1G.8 — /close \<id\>** — close position (optional exit price), record trade
-- [ ] **1G.9 — /risk** — drawdown %, throttle, heat, cash reserve %
-- [ ] **1G.10 — /resume** — resume from HALTED. Evaluates current DD to determine correct state: DD ≥ 12% → THROTTLED_MAX1, DD ≥ 8% → THROTTLED_50, DD < 6% → NORMAL. Does NOT blindly reset to NORMAL.
-- [ ] **1G.11 — /help** — list all commands
+- [x] **1G.4 — /status** — equity, P&L, drawdown, throttle state
+- [x] **1G.5 — /portfolio** — positions, entry, unrealized P&L, days held, cash, allocation %
+- [x] **1G.6 — /executed \<id\>** — confirm execution (optional price), opens position
+- [x] **1G.7 — /skip \<id\>** — skip signal, mark skipped
+- [x] **1G.8 — /close \<id\>** — close position (optional exit price), record trade
+- [x] **1G.9 — /risk** — drawdown %, throttle, heat, cash reserve %
+- [x] **1G.10 — /resume** — resume from HALTED. Evaluates current DD to determine correct state: DD ≥ 12% → THROTTLED_MAX1, DD ≥ 8% → THROTTLED_50, DD < 6% → NORMAL. Does NOT blindly reset to NORMAL.
+- [x] **1G.11 — /help** — list all commands
 
 Unit tests for each: valid input, invalid input, edge cases.
 
 #### Bot Infrastructure
 
-- [ ] **1G.12 — Polling mode** — python-telegram-bot, handlers, error handling. Integration test.
-- [ ] **1G.13 — Webhook mode** — stateless Lambda handler, same routing. Unit tests.
-- [ ] **1G.14 — Proactive sending** — signal cards, briefings, heartbeats. Unit tests.
+- [x] **1G.12 — Polling mode** — python-telegram-bot, handlers, error handling. Integration test.
+- [x] **1G.13 — Webhook mode** — stateless Lambda handler, same routing. Unit tests.
+- [x] **1G.14 — Proactive sending** — signal cards, briefings, heartbeats. Unit tests.
 
 #### Orchestrator
 
-- [ ] **1G.15 — runner.py**
+- [x] **1G.15 — runner.py**
   - `run_ingest()`: fetch → indicators → composite → guards → signal → Telegram → heartbeat
   - `run_briefing()`: portfolio + market → briefing → Telegram → heartbeat
   - Integration test: mock externals, verify flows
 
 #### Integration
 
-- [ ] **1G.16 — Bot integration test**
+- [x] **1G.16 — Bot integration test**
   - signal → card → /executed → updated → /status → /close → updated
   - Mocked Telegram + StorageBackend. State consistency.
 
