@@ -4,6 +4,7 @@ Exposes a `Settings` frozen dataclass populated from environment variables
 (with a `WEALTHOPS_` prefix), and factory helpers for storage backends.
 """
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,7 @@ class Settings:
         s3_bucket: S3 bucket name for the S3 storage backend.
         telegram_mode: Telegram polling mode (``"polling"`` or ``"webhook"``).
         log_level: Python logging level name (e.g. ``"INFO"``, ``"DEBUG"``).
+        guards_enabled: Maps guard names to on/off. Empty dict = all enabled.
     """
 
     tiingo_api_key: str
@@ -41,6 +43,36 @@ class Settings:
     s3_bucket: str = field(default="")
     telegram_mode: str = field(default="polling")
     log_level: str = field(default="INFO")
+    guards_enabled: dict[str, bool] = field(default_factory=dict)
+
+
+def _parse_guards_enabled(raw: str) -> dict[str, bool]:
+    """Parse a JSON string into a guard-enable mapping.
+
+    Args:
+        raw: JSON string (e.g. ``'{"MacroGate": false}'``).
+
+    Returns:
+        A dictionary mapping guard names to booleans.
+
+    Raises:
+        ValueError: If *raw* is not valid JSON or not a JSON object with
+            boolean values.
+    """
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"WEALTHOPS_GUARDS_ENABLED must be valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"WEALTHOPS_GUARDS_ENABLED must be a JSON object, got {type(parsed).__name__}"
+        )
+    for key, value in parsed.items():
+        if not isinstance(key, str) or not isinstance(value, bool):
+            raise ValueError(
+                f"WEALTHOPS_GUARDS_ENABLED values must be booleans, got {key!r}: {value!r}"
+            )
+    return dict(parsed)
 
 
 def load_settings() -> Settings:
@@ -83,6 +115,9 @@ def load_settings() -> Settings:
         s3_bucket=os.environ.get("WEALTHOPS_S3_BUCKET", ""),
         telegram_mode=os.environ.get("WEALTHOPS_TELEGRAM_MODE", "polling"),
         log_level=os.environ.get("WEALTHOPS_LOG_LEVEL", "INFO"),
+        guards_enabled=_parse_guards_enabled(
+            os.environ.get("WEALTHOPS_GUARDS_ENABLED", "{}"),
+        ),
     )
 
 

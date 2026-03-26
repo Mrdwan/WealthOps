@@ -312,34 +312,34 @@ Plus: annualized return, Sortino, avg win/loss ratio, max DD duration, equity cu
 
 Everything depends on these. Build before any feature work.
 
-- [ ] **0.1 — Pre-commit + CI**
+- [x] **0.1 — Pre-commit + CI**
   - `.pre-commit-config.yaml`: ruff check + fix, ruff format, mypy --strict, pytest --cov --cov-branch
   - GitHub Actions: same checks, Python 3.12+ matrix
   - Test directories: `tests/unit/`, `tests/integration/`
 
-- [ ] **0.2 — StorageBackend ABC + LocalStorage**
+- [x] **0.2 — StorageBackend ABC + LocalStorage**
   - `storage/base.py`: `StorageBackend` ABC with `read_parquet`, `write_parquet`, `read_json`, `write_json`
   - `storage/local.py`: `LocalStorage`, reads/writes to `WEALTHOPS_DATA_DIR` (default `./data`)
   - Auto-create directories. Missing file → clear error.
   - Unit tests: write/read parquet, write/read JSON, missing file, directory creation
 
-- [ ] **0.3 — Config module**
+- [x] **0.3 — Config module**
   - `config.py`: load `WEALTHOPS_*` env vars via python-dotenv
   - Instantiate correct StorageBackend from `WEALTHOPS_STORAGE`
   - Validate required vars (API keys, Telegram tokens). Fail fast if missing.
   - `GUARDS_ENABLED` config dict
   - Unit tests: mock env → correct backend, missing var → ValueError
 
-- [ ] **0.4 — Logging setup**
+- [x] **0.4 — Logging setup**
   - Rotating file handler: 5MB/file, keep 5, write to `logs/wealthops.log`
   - Levels: INFO (success), WARNING (anomalies), ERROR (failures)
   - Unit tests: log file created, rotation works
 
-- [ ] **0.5 — Custom exceptions**
+- [x] **0.5 — Custom exceptions**
   - `exceptions.py`: `DataValidationError`, `InsufficientHistoryError`, `ConfigurationError`, `StorageError`, `APIError`
   - Unit tests: each exception raises with message
 
-- [ ] **0.6 — Migrate 1A to StorageBackend**
+- [x] **0.6 — Migrate 1A to StorageBackend**
   - Refactor data pipeline to use injected `StorageBackend` instead of direct file I/O
   - All data providers receive `StorageBackend` via constructor
   - Integration test: data pipeline works with `LocalStorage`
