@@ -9,6 +9,8 @@ Commands:
 import datetime
 import sys
 
+_STARTING_CAPITAL: float = 15000.0
+
 
 def _run_ingest() -> None:
     """Full ingest pipeline: fetch -> indicators -> composite -> signal -> notify."""
@@ -81,6 +83,8 @@ def _run_ingest() -> None:
     # 5. Check for signal
     evaluation_date = datetime.date.fromisoformat(today)
     portfolio_mgr = PortfolioManager(storage)
+    if not storage.exists("state/portfolio"):
+        portfolio_mgr.update_equity(_STARTING_CAPITAL)
 
     # Load economic calendar from the data directory
     calendar_path = settings.data_dir / "calendars" / "economic_calendar.json"
@@ -152,6 +156,8 @@ def _run_briefing() -> None:
     settings = load_settings()
     storage = create_storage(settings)
     portfolio_mgr = PortfolioManager(storage)
+    if not storage.exists("state/portfolio"):
+        portfolio_mgr.update_equity(_STARTING_CAPITAL)
     state = portfolio_mgr.state
     signal_store = SignalStore(storage)
 
@@ -178,7 +184,7 @@ def _run_briefing() -> None:
         date=datetime.date.today(),
         portfolio_state=state,
         equity=equity,
-        starting_capital=15000.0,
+        starting_capital=_STARTING_CAPITAL,
         current_prices=current_prices,
         composite_score=composite_score,
         signal_class=signal_class,
@@ -223,6 +229,8 @@ def _run_bot() -> None:
     settings = load_settings()
     storage = create_storage(settings)
     portfolio_mgr = PortfolioManager(storage)
+    if not storage.exists("state/portfolio"):
+        portfolio_mgr.update_equity(_STARTING_CAPITAL)
     signal_store = SignalStore(storage)
     hb_chat = settings.telegram_heartbeat_chat_id or settings.telegram_chat_id
     bot = TelegramBot(
