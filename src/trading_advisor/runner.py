@@ -257,3 +257,71 @@ def run_bot() -> None:
     )
     print("[bot] Starting Telegram bot in polling mode ...")
     bot.start_polling()
+
+
+def run_backtest_report(*, output_path: str = "backtest_report.html") -> None:
+    """Run the full backtest and write an HTML report.
+
+    Args:
+        output_path: File path for the HTML report output.
+    """
+    from trading_advisor.backtest import run_backtest
+    from trading_advisor.backtest.report import compute_metrics, generate_report
+    from trading_advisor.config import create_storage, load_settings
+    from trading_advisor.guards import (
+        DrawdownGate,
+        EventGuard,
+        MacroGate,
+        PullbackZone,
+        TrendGate,
+        load_calendar,
+    )
+    from trading_advisor.indicators.composite import compute_composite
+    from trading_advisor.indicators.technical import compute_all_indicators
+
+    settings = load_settings()
+    storage = create_storage(settings)
+
+    # Read data from storage
+    xau_df = storage.read_parquet("ohlcv/XAUUSD_daily")
+    eurusd_df = storage.read_parquet("ohlcv/EURUSD_daily")
+    fedfunds_df = storage.read_parquet("macro/FEDFUNDS")
+    fedfunds_series = fedfunds_df["value"]
+
+    # Compute indicators + composite
+    indicators = compute_all_indicators(xau_df, eurusd_df)
+    composite_df = compute_composite(indicators)
+
+    # EUR/USD needs SMA_200 for MacroGate
+    eurusd_with_sma = eurusd_df.copy()
+    eurusd_with_sma["sma_200"] = eurusd_df["close"].rolling(200).mean()
+
+    # Set up guards
+    calendar_path = settings.data_dir / "calendars" / "economic_calendar.json"
+    calendar = load_calendar(calendar_path)
+    guards = [MacroGate(), TrendGate(), EventGuard(calendar), PullbackZone(), DrawdownGate()]
+
+    # Run backtest
+    result = run_backtest(
+        indicators=composite_df,
+        eurusd=eurusd_with_sma,
+        guards=guards,
+        guards_enabled=settings.guards_enabled,
+        fedfunds=fedfunds_series,
+        starting_capital=_STARTING_CAPITAL,
+    )
+
+    # Compute metrics + generate report
+    metrics = compute_metrics(result, fedfunds_series)
+    html = generate_report(result, metrics)
+
+    with open(output_path, "w", encoding="utf-8") as fh:
+        fh.write(html)
+
+    # Print summary
+    print(f"[backtest] Report written to {output_path}")
+    print(f"  Total trades: {metrics.get('total_trades', 0):.0f}")
+    print(f"  Sharpe ratio: {metrics.get('sharpe', 0):.2f}")
+    print(f"  Max drawdown: {metrics.get('max_drawdown_pct', 0):.1f}%")
+    print(f"  Profit factor: {metrics.get('profit_factor', 0):.2f}")
+    print(f"  Win rate: {metrics.get('win_rate', 0):.1%}")

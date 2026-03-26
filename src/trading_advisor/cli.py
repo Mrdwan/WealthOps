@@ -3,6 +3,8 @@
 All commands use lazy imports to keep startup fast.
 """
 
+import sys
+
 import click
 
 
@@ -34,3 +36,25 @@ def bot() -> None:
     from trading_advisor.runner import run_bot  # noqa: PLC0415
 
     run_bot()
+
+
+@main.command()
+@click.option("--output", "-o", default="backtest_report.html", help="Output HTML report path.")
+def backtest(*, output: str) -> None:
+    """Run backtest and generate HTML report."""
+    from trading_advisor.runner import run_backtest_report  # noqa: PLC0415
+
+    run_backtest_report(output_path=output)
+
+
+@main.command()
+def health() -> None:
+    """Check system health. Exit 0=OK, 1=stale/missing."""
+    from trading_advisor.config import create_storage, load_settings  # noqa: PLC0415
+    from trading_advisor.health import check_health  # noqa: PLC0415
+
+    settings = load_settings()
+    storage = create_storage(settings)
+    ok, message = check_health(storage)
+    click.echo(message)
+    sys.exit(0 if ok else 1)
