@@ -2,6 +2,7 @@
 
 from trading_advisor.backtest.engine import (
     BacktestAccount,
+    BacktestParams,
     BacktestResult,
     ExitEvent,
     ExitReason,
@@ -10,17 +11,68 @@ from trading_advisor.backtest.engine import (
     evaluate_exits,
     run_backtest,
 )
+from trading_advisor.backtest.go_nogo import (
+    CriterionResult,
+    GoNoGoReport,
+    evaluate_go_nogo,
+    format_go_nogo_report,
+)
 from trading_advisor.backtest.report import compute_metrics, generate_report
+from trading_advisor.backtest.sensitivity import (
+    SensitivityResult,
+    run_atr_multiplier_sensitivity,
+    run_ema_sensitivity,
+    run_fill_price_sensitivity,
+    run_guard_ablation,
+    run_momentum_lookback_sensitivity,
+    run_threshold_sensitivity,
+    run_tp_sensitivity,
+)
+from trading_advisor.backtest.validation import (
+    MonteCarloResult,
+    ShuffledPriceResult,
+    WalkForwardResult,
+    WalkForwardWindow,
+    compute_t_statistic,
+    compute_wfe,
+    generate_walk_forward_windows,
+    run_monte_carlo,
+    run_shuffled_price_test,
+    run_walk_forward,
+)
 
 __all__ = [
     "BacktestAccount",
+    "BacktestParams",
     "BacktestResult",
+    "CriterionResult",
     "ExitEvent",
     "ExitReason",
+    "GoNoGoReport",
+    "MonteCarloResult",
+    "SensitivityResult",
+    "ShuffledPriceResult",
     "Trade",
+    "WalkForwardResult",
+    "WalkForwardWindow",
     "check_fill",
     "compute_metrics",
+    "compute_t_statistic",
+    "compute_wfe",
     "evaluate_exits",
+    "evaluate_go_nogo",
+    "format_go_nogo_report",
     "generate_report",
+    "generate_walk_forward_windows",
+    "run_atr_multiplier_sensitivity",
     "run_backtest",
+    "run_ema_sensitivity",
+    "run_fill_price_sensitivity",
+    "run_guard_ablation",
+    "run_momentum_lookback_sensitivity",
+    "run_monte_carlo",
+    "run_shuffled_price_test",
+    "run_threshold_sensitivity",
+    "run_tp_sensitivity",
+    "run_walk_forward",
 ]

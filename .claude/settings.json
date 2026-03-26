@@ -11,12 +11,14 @@
       "Bash(git checkout .:*)",
       "Bash(git restore:*)",
       "Bash(git restore .:*)",
-      "Edit(.env)"
+      "Edit(.env)",
+      "Bash(python3:*)",
+      "Bash(uv run python3:*)",
+      "Bash(mkdir:*)"
     ],
     "allow": [
       "Bash(date:*)",
       "Bash(ls:*)",
-      "Bash(mkdir:*)",
       "Bash(find:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
@@ -31,8 +33,7 @@
       "Bash(git switch:*)",
       "Bash(md5:*)",
       "Bash(find *)",
-      "Bash(diff *)",
-      "Bash(python3:*)"
+      "Bash(diff *)"
     ]
   },
   "hooks": {
