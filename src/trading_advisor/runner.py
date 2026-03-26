@@ -126,23 +126,30 @@ def run_ingest(*, bootstrap: bool = False) -> None:
 
         trade_signal: TradeSignal = signals[0]  # type: ignore[assignment]
         signal_store.save_pending(trade_signal)
-        asyncio.run(bot.send_signal_card(trade_signal))
-        print(f"[ingest] Signal: {trade_signal.signal_strength} -- sent to Telegram")
     else:
+        trade_signal = None  # type: ignore[assignment]
         print("[ingest] No signal today.")
 
-    # 7. Send heartbeat
+    # 7. Send Telegram notifications + heartbeat (single event loop)
     duration = time.monotonic() - start_time
     timestamp = datetime.datetime.now(tz=datetime.UTC)
-    asyncio.run(
-        bot.send_heartbeat(
+
+    async def _send_all() -> None:
+        if trade_signal is not None:
+            await bot.send_signal_card(trade_signal)
+        await bot.send_heartbeat(
             command="ingest",
             timestamp=timestamp,
             duration_s=duration,
             composite=composite_score,
             signal_class=signal_class,
         )
-    )
+
+    asyncio.run(_send_all())
+
+    if trade_signal is not None:
+        print(f"[ingest] Signal: {trade_signal.signal_strength} -- sent to Telegram")
+
     storage.write_json(
         "state/heartbeat",
         {"command": "ingest", "timestamp": timestamp.isoformat()},
@@ -211,20 +218,22 @@ def run_briefing() -> None:
         signal_store=signal_store,
     )
 
-    asyncio.run(bot.send_briefing(data))
-
-    # Heartbeat
+    # Send briefing + heartbeat (single event loop)
     duration = time.monotonic() - start_time
     timestamp = datetime.datetime.now(tz=datetime.UTC)
-    asyncio.run(
-        bot.send_heartbeat(
+
+    async def _send_all() -> None:
+        await bot.send_briefing(data)
+        await bot.send_heartbeat(
             command="briefing",
             timestamp=timestamp,
             duration_s=duration,
             composite=composite_score,
             signal_class=signal_class,
         )
-    )
+
+    asyncio.run(_send_all())
+
     storage.write_json(
         "state/heartbeat",
         {"command": "briefing", "timestamp": timestamp.isoformat()},
