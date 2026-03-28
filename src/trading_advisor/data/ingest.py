@@ -43,6 +43,8 @@ class DataIngestor:
         start: str,
         end: str,
         storage_key: str,
+        *,
+        fresh: bool = False,
     ) -> ValidationResult:
         """Fetch, validate, and store OHLCV data for a symbol.
 
@@ -55,6 +57,8 @@ class DataIngestor:
             end: End date in ``'YYYY-MM-DD'`` format.
             storage_key: Key under which to read/write data in the storage
                 backend.
+            fresh: When ``True``, ignore existing data and fetch the full
+                range from *start* to *end*, overwriting any stored data.
 
         Returns:
             :class:`~trading_advisor.data.validation.ValidationResult` for the
@@ -68,7 +72,7 @@ class DataIngestor:
         existing: pd.DataFrame | None = None
         effective_start = start
 
-        if self._storage.exists(storage_key):
+        if not fresh and self._storage.exists(storage_key):
             existing = self._storage.read_parquet(storage_key)
             last_date = pd.Timestamp(existing.index.max())
             effective_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
@@ -107,6 +111,8 @@ class DataIngestor:
         start: str,
         end: str,
         storage_key: str,
+        *,
+        fresh: bool = False,
     ) -> None:
         """Fetch and store a macro data series.
 
@@ -119,11 +125,13 @@ class DataIngestor:
             end: End date in ``'YYYY-MM-DD'`` format.
             storage_key: Key under which to read/write data in the storage
                 backend.
+            fresh: When ``True``, ignore existing data and fetch the full
+                range from *start* to *end*, overwriting any stored data.
         """
         existing: pd.DataFrame | None = None
         effective_start = start
 
-        if self._storage.exists(storage_key):
+        if not fresh and self._storage.exists(storage_key):
             existing = self._storage.read_parquet(storage_key)
             last_date = pd.Timestamp(existing.index.max())
             effective_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
@@ -148,6 +156,8 @@ class DataIngestor:
         self,
         end_date: str,
         start_date: str | None = None,
+        *,
+        fresh: bool = False,
     ) -> dict[str, ValidationResult]:
         """Run the full daily ingest for all configured symbols and macro series.
 
@@ -158,6 +168,8 @@ class DataIngestor:
             end_date: End date in ``'YYYY-MM-DD'`` format.
             start_date: Optional start date override. Defaults to ``_DEFAULT_START``
                 (``2020-01-01``) when ``None``.
+            fresh: When ``True``, ignore existing data and fetch the full
+                range, overwriting any stored data.
 
         Returns:
             Dictionary mapping OHLCV symbol name to its
@@ -166,11 +178,11 @@ class DataIngestor:
         """
         start = start_date or _DEFAULT_START
 
-        xau_result = self.ingest_ohlcv("XAUUSD", start, end_date, "ohlcv/XAUUSD_daily")
-        eur_result = self.ingest_ohlcv("EURUSD", start, end_date, "ohlcv/EURUSD_daily")
+        xau_result = self.ingest_ohlcv("XAUUSD", start, end_date, "ohlcv/XAUUSD_daily", fresh=fresh)
+        eur_result = self.ingest_ohlcv("EURUSD", start, end_date, "ohlcv/EURUSD_daily", fresh=fresh)
 
-        self.ingest_macro("VIXCLS", start, end_date, "macro/VIXCLS")
-        self.ingest_macro("T10Y2Y", start, end_date, "macro/T10Y2Y")
-        self.ingest_macro("FEDFUNDS", start, end_date, "macro/FEDFUNDS")
+        self.ingest_macro("VIXCLS", start, end_date, "macro/VIXCLS", fresh=fresh)
+        self.ingest_macro("T10Y2Y", start, end_date, "macro/T10Y2Y", fresh=fresh)
+        self.ingest_macro("FEDFUNDS", start, end_date, "macro/FEDFUNDS", fresh=fresh)
 
         return {"XAUUSD": xau_result, "EURUSD": eur_result}

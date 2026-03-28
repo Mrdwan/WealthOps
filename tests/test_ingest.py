@@ -452,3 +452,41 @@ def test_run_daily_ingest_uses_custom_start_date(tmp_path: Path) -> None:
 
     assert results["XAUUSD"].valid is True
     assert all(s == "2015-01-01" for s in recorded_starts)
+
+
+def test_run_daily_ingest_fresh_overwrites_existing(tmp_path: Path) -> None:
+    """fresh=True ignores existing data and fetches from start, overwriting."""
+    storage = LocalStorage(tmp_path)
+
+    # Pre-populate with data starting at 2024-01-01
+    old_data = _make_ohlcv("2024-01-01", 5)
+    storage.write_parquet("ohlcv/XAUUSD_daily", old_data)
+    assert len(storage.read_parquet("ohlcv/XAUUSD_daily")) == 5
+
+    # Fresh ingest with data starting at 2020-01-01
+    new_data = _make_ohlcv("2020-01-01", 10)
+    macro_data = _make_macro("2020-01-01", 10)
+
+    recorded_starts: list[str] = []
+
+    class RecordingOHLCVProvider(FakeOHLCVProvider):
+        """Wraps FakeOHLCVProvider to record the start arg."""
+
+        def fetch_ohlcv(self, symbol: str, start: str, end: str) -> pd.DataFrame:
+            recorded_starts.append(start)
+            return super().fetch_ohlcv(symbol, start, end)
+
+    ingestor = DataIngestor(
+        ohlcv_provider=RecordingOHLCVProvider(new_data),
+        macro_provider=FakeMacroProvider(macro_data),
+        storage=storage,
+    )
+
+    ingestor.run_daily_ingest("2025-12-31", start_date="2020-01-01", fresh=True)
+
+    # Should have fetched from 2020, not appended to 2024
+    assert all(s == "2020-01-01" for s in recorded_starts)
+
+    # Data should be overwritten with 10 rows, not 5
+    result = storage.read_parquet("ohlcv/XAUUSD_daily")
+    assert len(result) == 10

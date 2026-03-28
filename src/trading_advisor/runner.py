@@ -52,7 +52,7 @@ def run_ingest(*, bootstrap: bool = False) -> None:
     today = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d")
     print(f"[ingest] Running daily ingest up to {today} ...")
     start_date = _BOOTSTRAP_START if bootstrap else None
-    results = ingestor.run_daily_ingest(end_date=today, start_date=start_date)
+    results = ingestor.run_daily_ingest(end_date=today, start_date=start_date, fresh=bootstrap)
 
     for symbol, result in results.items():
         status = "OK" if result.valid else "FAILED"
