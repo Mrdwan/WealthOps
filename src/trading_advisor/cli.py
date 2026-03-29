@@ -40,11 +40,14 @@ def bot() -> None:
 
 @main.command()
 @click.option("--output", "-o", default="backtest_report.html", help="Output HTML report path.")
-def backtest(*, output: str) -> None:
+@click.option(
+    "--threshold", "-t", type=float, default=None, help="Composite buy threshold (default 1.5)."
+)
+def backtest(*, output: str, threshold: float | None) -> None:
     """Run backtest and generate HTML report."""
     from trading_advisor.runner import run_backtest_report  # noqa: PLC0415
 
-    run_backtest_report(output_path=output)
+    run_backtest_report(output_path=output, threshold=threshold)
 
 
 @main.command()

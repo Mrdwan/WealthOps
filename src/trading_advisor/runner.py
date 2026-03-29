@@ -267,13 +267,18 @@ def run_bot() -> None:
     bot.start_polling()
 
 
-def run_backtest_report(*, output_path: str = "backtest_report.html") -> None:
+def run_backtest_report(
+    *,
+    output_path: str = "backtest_report.html",
+    threshold: float | None = None,
+) -> None:
     """Run the full backtest and write an HTML report.
 
     Args:
         output_path: File path for the HTML report output.
+        threshold: Override composite buy threshold (default from BacktestParams).
     """
-    from trading_advisor.backtest import run_backtest
+    from trading_advisor.backtest import BacktestParams, run_backtest
     from trading_advisor.backtest.report import compute_metrics, generate_report
     from trading_advisor.config import create_storage, load_settings
     from trading_advisor.guards import (
@@ -310,6 +315,7 @@ def run_backtest_report(*, output_path: str = "backtest_report.html") -> None:
     guards = [MacroGate(), TrendGate(), EventGuard(calendar), PullbackZone(), DrawdownGate()]
 
     # Run backtest
+    params = BacktestParams(composite_buy_threshold=threshold) if threshold is not None else None
     result = run_backtest(
         indicators=composite_df,
         eurusd=eurusd_with_sma,
@@ -317,6 +323,7 @@ def run_backtest_report(*, output_path: str = "backtest_report.html") -> None:
         guards_enabled=settings.guards_enabled,
         fedfunds=fedfunds_series,
         starting_capital=_STARTING_CAPITAL,
+        params=params,
     )
 
     # Compute metrics + generate report
