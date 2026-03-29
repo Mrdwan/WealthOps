@@ -275,9 +275,9 @@ class TestSharpeRatio:
     def test_sharpe_with_fedfunds(self) -> None:
         equity_values = [10000.0, 10200.0, 9800.0, 10100.0, 9900.0]
         result = _make_result([], equity_values, starting_capital=10000.0)
-        # Fedfunds of 5% over the period
+        # Fedfunds of 5% over the period (FRED stores as percentage)
         dates = pd.bdate_range("2024-01-01", periods=5, freq="B")
-        fedfunds = pd.Series([0.05, 0.05, 0.05, 0.05, 0.05], index=dates)
+        fedfunds = pd.Series([5.0, 5.0, 5.0, 5.0, 5.0], index=dates)
         metrics = compute_metrics(result, fedfunds)
 
         equity = pd.Series(equity_values)
@@ -440,7 +440,7 @@ class TestEdgeCases:
         result = _make_result([], equity_values, starting_capital=10000.0)
         # Fedfunds in 2023, but equity curve starts 2024
         ff_dates = pd.bdate_range("2023-01-01", periods=3, freq="B")
-        fedfunds = pd.Series([0.05, 0.05, 0.05], index=ff_dates)
+        fedfunds = pd.Series([5.0, 5.0, 5.0], index=ff_dates)
         metrics = compute_metrics(result, fedfunds)
 
         # With daily_rf=0, same as empty fedfunds

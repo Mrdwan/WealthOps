@@ -118,7 +118,9 @@ def compute_metrics(
         end_date = equity_curve.index[-1]
         mask = (fedfunds.index >= start_date) & (fedfunds.index <= end_date)
         in_range = fedfunds.loc[mask]
-        daily_rf = 0.0 if len(in_range) == 0 else float(in_range.mean()) / 252
+        # FRED publishes FEDFUNDS as a percentage (e.g. 4.57 for 4.57%).
+        # Convert to decimal before dividing by trading days.
+        daily_rf = 0.0 if len(in_range) == 0 else float(in_range.mean()) / 100 / 252
 
     excess = daily_returns - daily_rf
 

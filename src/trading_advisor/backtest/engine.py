@@ -544,7 +544,10 @@ def get_fedfunds_rate(fedfunds: pd.Series, date: pd.Timestamp) -> float:
     mask = fedfunds.index <= date
     if not mask.any():
         return 0.0
-    return float(fedfunds.loc[mask].iloc[-1])
+    raw = float(fedfunds.loc[mask].iloc[-1])
+    # FRED publishes FEDFUNDS as a percentage (e.g. 4.57 for 4.57%).
+    # Convert to decimal for the funding formula.
+    return raw / 100
 
 
 # ------------------------------------------------------------------

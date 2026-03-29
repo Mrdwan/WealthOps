@@ -74,22 +74,22 @@ class TestGetFedfundsRate:
     """Tests for get_fedfunds_rate."""
 
     def _make_series(self) -> "pd.Series[float]":
-        """Create a sample FEDFUNDS series."""
+        """Create a sample FEDFUNDS series (FRED publishes as percentages)."""
         dates = pd.to_datetime(["2024-01-01", "2024-02-01", "2024-03-01"])
-        return pd.Series([0.05, 0.045, 0.04], index=dates)
+        return pd.Series([5.0, 4.5, 4.0], index=dates)
 
     def test_exact_date(self) -> None:
-        """Exact date match returns that rate."""
+        """Exact date match returns that rate converted to decimal."""
         s = self._make_series()
         assert get_fedfunds_rate(s, pd.Timestamp("2024-02-01")) == pytest.approx(0.045)
 
     def test_forward_fill(self) -> None:
-        """Date between entries returns most recent prior value."""
+        """Date between entries returns most recent prior value as decimal."""
         s = self._make_series()
         assert get_fedfunds_rate(s, pd.Timestamp("2024-02-15")) == pytest.approx(0.045)
 
     def test_after_all(self) -> None:
-        """Date after all entries returns the last value."""
+        """Date after all entries returns the last value as decimal."""
         s = self._make_series()
         assert get_fedfunds_rate(s, pd.Timestamp("2024-06-01")) == pytest.approx(0.04)
 
