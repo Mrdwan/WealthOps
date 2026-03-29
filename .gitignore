@@ -62,3 +62,6 @@ Thumbs.db
 
 # Plans (local logs, not part of the project)
 docs/plans/
+
+my_report.html
+backtest_report.html
