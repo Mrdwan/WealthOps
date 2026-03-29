@@ -14,7 +14,7 @@ def main() -> None:
 
 
 @main.command()
-@click.option("--bootstrap", is_flag=True, help="Fetch full history from 2015.")
+@click.option("--bootstrap", is_flag=True, help="Fresh fetch from WEALTHOPS_BOOTSTRAP_START.")
 def ingest(*, bootstrap: bool) -> None:
     """Fetch data, compute indicators, and scan for signals."""
     from trading_advisor.runner import run_ingest  # noqa: PLC0415

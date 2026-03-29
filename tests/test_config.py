@@ -65,6 +65,7 @@ def test_load_settings_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.s3_bucket == ""
     assert settings.telegram_mode == "polling"
     assert settings.log_level == "INFO"
+    assert settings.bootstrap_start == "2020-01-01"
 
 
 def test_load_settings_optional_vars_override_defaults(
@@ -78,6 +79,7 @@ def test_load_settings_optional_vars_override_defaults(
     monkeypatch.setenv("WEALTHOPS_S3_BUCKET", "my-bucket")
     monkeypatch.setenv("WEALTHOPS_TELEGRAM_MODE", "webhook")
     monkeypatch.setenv("WEALTHOPS_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("WEALTHOPS_BOOTSTRAP_START", "2015-01-01")
 
     settings = load_settings()
 
@@ -87,6 +89,7 @@ def test_load_settings_optional_vars_override_defaults(
     assert settings.s3_bucket == "my-bucket"
     assert settings.telegram_mode == "webhook"
     assert settings.log_level == "DEBUG"
+    assert settings.bootstrap_start == "2015-01-01"
 
 
 def test_load_settings_data_dir_converted_to_path(

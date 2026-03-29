@@ -31,6 +31,9 @@ class Settings:
         telegram_mode: Telegram polling mode (``"polling"`` or ``"webhook"``).
         log_level: Python logging level name (e.g. ``"INFO"``, ``"DEBUG"``).
         guards_enabled: Maps guard names to on/off. Empty dict = all enabled.
+        bootstrap_start: Earliest date for ``--bootstrap`` ingest.
+            Defaults to ``2020-01-01`` (Tiingo free tier). Set
+            ``WEALTHOPS_BOOTSTRAP_START=2015-01-01`` for paid tier.
     """
 
     tiingo_api_key: str
@@ -44,6 +47,7 @@ class Settings:
     telegram_mode: str = field(default="polling")
     log_level: str = field(default="INFO")
     guards_enabled: dict[str, bool] = field(default_factory=dict)
+    bootstrap_start: str = field(default="2020-01-01")
 
 
 def _parse_guards_enabled(raw: str) -> dict[str, bool]:
@@ -118,6 +122,7 @@ def load_settings() -> Settings:
         guards_enabled=_parse_guards_enabled(
             os.environ.get("WEALTHOPS_GUARDS_ENABLED", "{}"),
         ),
+        bootstrap_start=os.environ.get("WEALTHOPS_BOOTSTRAP_START", "2020-01-01"),
     )
 
 
